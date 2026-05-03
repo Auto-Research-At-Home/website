@@ -1,0 +1,101 @@
+export const projectRegistryAbi = [
+  {
+    type: "function",
+    name: "nextProjectId",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "getProject",
+    stateMutability: "view",
+    inputs: [{ name: "projectId", type: "uint256" }],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        components: [
+          { name: "protocolHash", type: "bytes32" },
+          { name: "repoSnapshotHash", type: "bytes32" },
+          { name: "benchmarkHash", type: "bytes32" },
+          { name: "baselineAggregateScore", type: "int256" },
+          { name: "baselineMetricsHash", type: "bytes32" },
+          { name: "currentBestCodeHash", type: "bytes32" },
+          { name: "currentBestAggregateScore", type: "int256" },
+          { name: "currentBestMetricsHash", type: "bytes32" },
+          { name: "currentBestMiner", type: "address" },
+          { name: "token", type: "address" },
+          { name: "creator", type: "address" },
+          { name: "createdAt", type: "uint64" },
+        ],
+      },
+    ],
+  },
+] as const;
+
+export const projectTokenAbi = [
+  {
+    type: "function",
+    name: "name",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }],
+  },
+  {
+    type: "function",
+    name: "symbol",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }],
+  },
+  {
+    type: "function",
+    name: "decimals",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint8" }],
+  },
+  {
+    type: "function",
+    name: "totalSupply",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "priceAt",
+    stateMutability: "view",
+    inputs: [{ name: "supply", type: "uint256" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "basePrice",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "slope",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "minerPoolCap",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "minerPoolMinted",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+] as const;
