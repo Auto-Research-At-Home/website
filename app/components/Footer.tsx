@@ -57,7 +57,7 @@ export function Footer() {
 
       <div className="border-t border-[var(--color-line)]">
         <div className="container-page flex flex-col gap-3 py-6 font-mono text-xs text-[var(--color-fg-dim)] md:flex-row md:items-center md:justify-between">
-          <p>© {new Date().getFullYear()} OpenResearch</p>
+          <p>© {new Date().getFullYear()} OpenResearch · Jupiter Innovations Lab Inc.</p>
           <p>The benchmark is the oracle.</p>
         </div>
       </div>

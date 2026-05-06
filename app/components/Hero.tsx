@@ -103,7 +103,7 @@ export function Hero() {
         >
           <div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="label">Four lines to your first run</p>
+              <p className="label">Try it now</p>
               <div
                 role="tablist"
                 aria-label="Install skill"
