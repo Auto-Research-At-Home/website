@@ -1,15 +1,20 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
+import { PROJECT_REGISTRY_ADDRESS } from "@/lib/arah/chain";
 import {
-  delta,
+  aggregateDeltaPercent,
+  aggregateImprovement,
   explorerAddressUrl,
+  formatAggregateScore,
   formatDate,
-  score,
-  shortAddress,
+  formatTokenAmount,
   shortHash,
   ZERO_ADDRESS,
 } from "@/lib/arah/format";
+import { HIDDEN_PROJECT_IDS } from "@/lib/arah/projectUi";
 import { fetchListedProjects, type ListedProject } from "@/lib/arah/registry";
+import { AddressLink } from "../components/AddressLink";
 import { Footer } from "../components/Footer";
 import { Nav } from "../components/Nav";
 
@@ -28,6 +33,7 @@ export default async function ProjectsPage() {
 
   try {
     projects = await fetchListedProjects();
+    projects = projects.filter((p) => !HIDDEN_PROJECT_IDS.has(p.id));
   } catch (e) {
     error = e instanceof Error ? e.message : "Failed to read on-chain registry";
   }
@@ -69,11 +75,14 @@ function Header({ count, error }: { count: number; error: string | null }) {
               PROJECTS
             </h1>
             <p className="label mt-4">
-              {error
-                ? "Network unreachable"
-                : `${count} project${count === 1 ? "" : "s"} listed on 0G Galileo · ${shortAddress(
-                    "0xc84768e450534974C0DD5BAb7c1b695744124136",
-                  )}`}
+              {error ? (
+                "Network unreachable"
+              ) : (
+                <>
+                  {count} project{count === 1 ? "" : "s"} listed on 0G Galileo ·{" "}
+                  <AddressLink address={PROJECT_REGISTRY_ADDRESS} />
+                </>
+              )}
             </p>
           </div>
 
@@ -95,7 +104,7 @@ function ProjectsTable({ projects }: { projects: ListedProject[] }) {
         <div className="hidden grid-cols-[60px_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,1fr)] gap-6 border-b border-[var(--color-line)] pb-3 md:grid">
           <p className="label">#</p>
           <p className="label">Project</p>
-          <p className="label">Best score</p>
+          <p className="label">Improvement</p>
           <p className="label">Δ vs baseline</p>
           <p className="label">Supply</p>
           <p className="label text-right">Buy price</p>
@@ -112,51 +121,61 @@ function ProjectsTable({ projects }: { projects: ListedProject[] }) {
 }
 
 function ProjectRow({ project }: { project: ListedProject }) {
-  const d = delta(
+  const improvement = aggregateImprovement(
+    project.currentBestAggregateScore,
+    project.baselineAggregateScore,
+  );
+  const d = aggregateDeltaPercent(
     project.currentBestAggregateScore,
     project.baselineAggregateScore,
   );
   const isBaseline = project.currentBestMiner === ZERO_ADDRESS;
 
   return (
-    <li className="grid grid-cols-1 gap-3 border-b border-[var(--color-line)] py-6 transition-colors hover:bg-[var(--color-bg-soft)] md:grid-cols-[60px_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,1fr)] md:items-center md:gap-6 md:py-5">
-      <div className="font-mono text-sm text-[var(--color-fg-muted)]">
+    <li className="group relative grid cursor-pointer grid-cols-1 gap-3 border-b border-[var(--color-line)] py-6 transition-colors hover:bg-[var(--color-brand-subtle)] md:grid-cols-[60px_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,1fr)] md:items-center md:gap-6 md:py-5">
+      <Link
+        href={`/projects/${project.id}`}
+        aria-label={`Open ${project.token.name} (${project.token.symbol})`}
+        className="pointer-events-auto absolute inset-0 z-0"
+      />
+
+      <div className="pointer-events-none relative z-10 font-mono text-sm text-[var(--color-fg-muted)]">
         {String(project.id).padStart(2, "0")}
       </div>
 
-      <div className="min-w-0">
+      <div className="pointer-events-none relative z-10 min-w-0">
         <p className="font-mono text-base text-[var(--color-fg)]">
-          {project.token.name}{" "}
+          <Link
+            href={`/projects/${project.id}`}
+            className="relative z-20 inline pointer-events-auto text-[var(--color-fg)] underline-offset-4 hover:text-[var(--color-brand-bright)] hover:underline"
+          >
+            {project.token.name}
+          </Link>{" "}
           <span className="text-[var(--color-fg-dim)]">
             ({project.token.symbol})
           </span>
         </p>
-        <p className="mt-1 font-mono text-xs text-[var(--color-fg-dim)]">
-          <a
-            href={explorerAddressUrl(project.token.address)}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="hover:text-[var(--color-fg-muted)] hover:underline"
-          >
-            {shortAddress(project.token.address)}
-          </a>
+        <p className="relative z-10 mt-1 font-mono text-xs text-[var(--color-fg-dim)]">
+          <AddressLink address={project.token.address} />
           {" · "}
           <span title="Created">{formatDate(project.createdAt)}</span>
           {" · "}
-          <span title="Creator">creator {shortAddress(project.creator)}</span>
+          <span>
+            creator <AddressLink address={project.creator} />
+          </span>
         </p>
       </div>
 
-      <div className="font-mono text-sm">
+      <div className="pointer-events-none relative z-10 font-mono text-sm">
         <p className="text-[var(--color-fg)]">
-          {score(project.currentBestAggregateScore)}
+          {formatAggregateScore(improvement)}
         </p>
         <p className="mt-1 text-xs text-[var(--color-fg-dim)]">
-          baseline {score(project.baselineAggregateScore)}
+          baseline {formatAggregateScore(project.baselineAggregateScore)}
         </p>
       </div>
 
-      <div className="font-mono text-sm">
+      <div className="pointer-events-none relative z-10 font-mono text-sm">
         {isBaseline || d === null ? (
           <span className="text-[var(--color-fg-dim)]">—</span>
         ) : (
@@ -172,21 +191,36 @@ function ProjectRow({ project }: { project: ListedProject }) {
           </span>
         )}
         <p className="mt-1 text-xs text-[var(--color-fg-dim)]">
-          {isBaseline
-            ? "no proposals yet"
-            : `miner ${shortAddress(project.currentBestMiner)}`}
+          {isBaseline ? (
+            "no proposals yet"
+          ) : (
+            <>
+              miner <AddressLink address={project.currentBestMiner} />
+            </>
+          )}
         </p>
       </div>
 
-      <div className="font-mono text-sm text-[var(--color-fg)]">
-        {project.token.totalSupply.toString()}
+      <div className="pointer-events-none relative z-10 font-mono text-sm text-[var(--color-fg)]">
+        {formatTokenAmount(project.token.totalSupply, project.token.decimals)}{" "}
+        <span className="text-[var(--color-fg-dim)]">
+          {project.token.symbol}
+        </span>
         <p className="mt-1 text-xs text-[var(--color-fg-dim)]">
-          pool {project.token.minerPoolMinted.toString()}/
-          {project.token.minerPoolCap.toString()}
+          pool{" "}
+          {formatTokenAmount(
+            project.token.minerPoolMinted,
+            project.token.decimals,
+          )}
+          /
+          {formatTokenAmount(
+            project.token.minerPoolCap,
+            project.token.decimals,
+          )}
         </p>
       </div>
 
-      <div className="font-mono text-sm text-[var(--color-fg)] md:text-right">
+      <div className="pointer-events-none relative z-10 font-mono text-sm text-[var(--color-fg)] md:text-right">
         {project.token.currentPriceDisplay}
         <p className="mt-1 text-xs text-[var(--color-fg-dim)]">
           {shortHash(project.protocolHash, 8, 4)}
@@ -237,9 +271,7 @@ function ErrorState({ message }: { message: string }) {
             Refresh in a moment, or try the explorer directly:
           </p>
           <a
-            href={explorerAddressUrl(
-              "0xc84768e450534974C0DD5BAb7c1b695744124136",
-            )}
+            href={explorerAddressUrl(PROJECT_REGISTRY_ADDRESS)}
             target="_blank"
             rel="noreferrer noopener"
             className="mt-2 inline-block font-mono text-xs text-[var(--color-fg-muted)] underline-offset-4 hover:text-[var(--color-fg)] hover:underline"

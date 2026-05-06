@@ -8,14 +8,18 @@
     "start": "next start"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.100.9",
     "next": "^16.2.4",
+    "nunjucks": "^3.2.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "viem": "^2.48.8"
+    "viem": "^2.48.8",
+    "wagmi": "^3.6.9"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.0",
     "@types/node": "^22.10.5",
+    "@types/nunjucks": "^3.2.6",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
     "postcss": "^8.5.1",

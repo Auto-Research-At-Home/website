@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 @theme {
+  /* Core dark surfaces */
   --color-bg: #000000;
   --color-bg-soft: #0a0a0a;
   --color-bg-elev: #111111;
@@ -9,9 +10,19 @@
   --color-fg-dim: #555555;
   --color-line: #1c1c1c;
   --color-line-soft: #141414;
-  --color-cyan: #22d3ee;
-  --color-blue: #3b82f6;
-  --color-green: #22c55e;
+
+  /* OpenResearch logo — steel blues + sky highlight (tuned for dark UI) */
+  --color-brand: #5b90a8;
+  --color-brand-muted: #4a7588;
+  --color-brand-bright: #8fd4ea;
+  --color-brand-dim: #355d71;
+  --color-brand-subtle: rgb(143 212 234 / 0.1);
+  --color-brand-line: rgb(91 144 168 / 0.35);
+
+  /* Semantic accents aligned with brand */
+  --color-cyan: #8fd4ea;
+  --color-blue: #5b90a8;
+  --color-green: #45b5a5;
 
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -35,8 +46,8 @@
   }
 
   ::selection {
-    background-color: var(--color-fg);
-    color: var(--color-bg);
+    background-color: var(--color-brand-dim);
+    color: var(--color-fg);
   }
 }
 
@@ -56,7 +67,7 @@
   font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--color-fg-muted);
+  color: var(--color-brand-muted);
 }
 
 @utility hairline {

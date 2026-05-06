@@ -1,0 +1,40 @@
+{# Protocol JSON → Markdown (Nunjucks ≈ Jinja2). Edit this file to match a Python Jinja2 template. #}
+{% set _title = protocol.title | default(protocol.name) | default(protocol.project_name) | default(protocol.projectName) %}
+{% if _title %}
+# {{ _title }}
+{% else %}
+# Experiment protocol
+{% endif %}
+
+{% set _desc = protocol.description | default(protocol.statement_of_purpose) | default(protocol.statementOfPurpose) | default(protocol.summary) | default(protocol.purpose) %}
+{% if _desc %}
+
+{{ _desc }}
+
+{% endif %}
+
+---
+
+{% for key, value in protocol | dictsort %}
+{% if key not in excluded %}
+
+{% if value is mapping %}
+
+### {{ key | human_key }}
+
+{{ value | nested_md }}
+
+{% elif value is array %}
+
+### {{ key | human_key }}
+
+{{ value | nested_md }}
+
+{% else %}
+
+**{{ key | human_key }}:** {{ value | format_leaf }}
+
+{% endif %}
+
+{% endif %}
+{% endfor %}

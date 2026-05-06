@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { cookieToInitialState } from "wagmi";
+import { wagmiConfig } from "@/lib/arah/wagmi";
+import { Web3Provider } from "./web3-provider";
 import "./globals.css";
 
 const inter = Inter({
@@ -12,6 +16,7 @@ const jetbrains = JetBrains_Mono({
   subsets: ["latin"],
   variable: "--font-jetbrains",
   display: "swap",
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -53,12 +58,17 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const cookie = (await headers()).get("cookie") ?? undefined;
+  const initialState = cookieToInitialState(wagmiConfig, cookie);
+
   return (
     <html lang="en" className={`${inter.variable} ${jetbrains.variable}`}>
-      <body className="min-h-screen antialiased">{children}</body>
+      <body className="min-h-screen antialiased">
+        <Web3Provider initialState={initialState}>{children}</Web3Provider>
+      </body>
     </html>
   );
 }

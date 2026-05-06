@@ -91,7 +91,7 @@ export function Hero() {
               </Link>
               <a
                 href="#how"
-                className="inline-flex items-center gap-2 border border-[var(--color-line)] bg-transparent px-5 py-3 font-mono text-sm text-[var(--color-fg-muted)] transition-colors hover:border-[var(--color-fg-dim)] hover:text-[var(--color-fg)]"
+                className="inline-flex items-center gap-2 border border-[var(--color-line)] bg-transparent px-5 py-3 font-mono text-sm text-[var(--color-fg-muted)] transition-colors hover:border-[var(--color-brand)] hover:text-[var(--color-brand-bright)]"
               >
                 How it works
               </a>
@@ -121,8 +121,8 @@ export function Hero() {
                       onClick={() => setActive(t.id)}
                       className={`label transition-colors ${
                         isActive
-                          ? "text-[var(--color-fg)]"
-                          : "hover:text-[var(--color-fg)]"
+                          ? "text-[var(--color-brand-bright)]"
+                          : "hover:text-[var(--color-brand-bright)]"
                       }`}
                     >
                       {t.label}
@@ -143,7 +143,7 @@ export function Hero() {
                 type="button"
                 onClick={handleCopy}
                 aria-label="Copy install command"
-                className="shrink-0 text-[var(--color-fg-muted)] transition-colors hover:text-[var(--color-fg)]"
+                className="shrink-0 text-[var(--color-fg-muted)] transition-colors hover:text-[var(--color-brand-bright)]"
               >
                 {copied ? <CheckIcon /> : <CopyIcon />}
               </button>
@@ -156,7 +156,7 @@ export function Hero() {
               {agents.map((a) => (
                 <li
                   key={a.name}
-                  className="group flex h-12 items-center justify-center border border-[var(--color-line)] bg-[var(--color-bg-soft)] transition-colors hover:border-[var(--color-fg-dim)]"
+                  className="group flex h-12 items-center justify-center border border-[var(--color-line)] bg-[var(--color-bg-soft)] transition-colors hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]"
                   title={a.name}
                 >
                   {a.icon ? (

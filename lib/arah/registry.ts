@@ -4,7 +4,11 @@ import {
   http,
   type ContractFunctionReturnType,
 } from "viem";
-import { galileo, PROJECT_REGISTRY_ADDRESS } from "./chain";
+import {
+  galileo,
+  getGalileoRpcUrl,
+  PROJECT_REGISTRY_ADDRESS,
+} from "./chain";
 import { projectRegistryAbi, projectTokenAbi } from "./abis";
 
 type ProjectStruct = ContractFunctionReturnType<
@@ -13,9 +17,6 @@ type ProjectStruct = ContractFunctionReturnType<
   "getProject"
 >;
 
-const rpcUrl =
-  process.env.NEXT_PUBLIC_GALILEO_RPC_URL ?? "https://evmrpc-testnet.0g.ai";
-
 const registryAddress =
   (process.env.NEXT_PUBLIC_PROJECT_REGISTRY_ADDRESS as
     | `0x${string}`
@@ -23,7 +24,7 @@ const registryAddress =
 
 export const publicClient = createPublicClient({
   chain: galileo,
-  transport: http(rpcUrl),
+  transport: http(getGalileoRpcUrl()),
 });
 
 export type ListedProject = {
@@ -54,19 +55,34 @@ export type ListedProject = {
   };
 };
 
-export async function fetchListedProjects(): Promise<ListedProject[]> {
+export async function fetchProjectCount(): Promise<number> {
   const count = await publicClient.readContract({
     address: registryAddress,
     abi: projectRegistryAbi,
     functionName: "nextProjectId",
   });
+  return Number(count);
+}
 
-  if (count === 0n) return [];
+export async function fetchProject(id: number): Promise<ListedProject | null> {
+  const count = await fetchProjectCount();
+  if (id < 0 || id >= count) return null;
 
-  const projectIds = Array.from({ length: Number(count) }, (_, id) =>
-    BigInt(id),
-  );
+  const [projects] = await Promise.all([buildProjects([BigInt(id)])]);
+  return projects[0] ?? null;
+}
 
+export async function fetchListedProjects(): Promise<ListedProject[]> {
+  const count = await fetchProjectCount();
+  if (count === 0) return [];
+
+  const projectIds = Array.from({ length: count }, (_, id) => BigInt(id));
+  return buildProjects(projectIds);
+}
+
+async function buildProjects(
+  projectIds: bigint[],
+): Promise<ListedProject[]> {
   const projectReads = (await publicClient.multicall({
     allowFailure: false,
     contracts: projectIds.map((projectId) => ({
@@ -134,7 +150,7 @@ export async function fetchListedProjects(): Promise<ListedProject[]> {
     const currentPriceWei = priceReads[index] as bigint;
 
     return {
-      id: index,
+      id: Number(projectIds[index]),
       protocolHash: project.protocolHash,
       repoSnapshotHash: project.repoSnapshotHash,
       benchmarkHash: project.benchmarkHash,
