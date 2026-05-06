@@ -5,7 +5,7 @@ const links = [
   { href: "/projects", label: "Projects" },
   { href: "/#how", label: "Protocol" },
   { href: "/#architecture", label: "Docs" },
-  { href: "https://github.com/Auto-Research-At-Home", label: "Github" },
+  { href: "https://github.com/OpenResearchh", label: "Github" },
 ];
 
 export function Nav() {

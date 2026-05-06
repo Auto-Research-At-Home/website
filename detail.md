@@ -45,7 +45,7 @@ AutoResearch At Home is not specific to ML. Any domain where a benchmark can obj
 ┌──────────────────────────────────────────────────────────────────────┐
 │                        RESEARCHER (Project Creator)                   │
 │                                                                        │
-│  1. Installs skills: npx skills add Auto-Research-At-Home/skill       │
+│  1. Installs skills: npx skills add OpenResearchh/skill               │
 │  2. Provides a GitHub repository URL                                  │
 │  3. Agent reads + understands codebase, derives protocol.json         │
 │  4. Agent runs repo in sandbox → establishes baseline benchmark score │
@@ -95,13 +95,13 @@ Users interact with the system through a skill installed into their existing AI 
 
 ```bash
 # Install all ARAH skills from this repository
-npx skills add Auto-Research-At-Home/skill
+npx skills add OpenResearchh/skill
 
 # Or install only the project creation skill
-npx skills add Auto-Research-At-Home/skill --skill autoresearch-create
+npx skills add OpenResearchh/skill --skill autoresearch-create
 
 # Or install only the mining skill (Phase 2 — trials against a finalized protocol)
-npx skills add Auto-Research-At-Home/skill --skill autoresearch-mine
+npx skills add OpenResearchh/skill --skill autoresearch-mine
 ```
 
 The skills are portable Agent Skills: each capability is a directory with a `SKILL.md` file plus any supporting resources. The `skills` CLI installs them into supported hosts such as Claude Code, Cursor, and Codex.
@@ -392,10 +392,10 @@ Miner stakes tokens → submits proposal                            │
 
 ```bash
 # Install this repository's skills into supported agents
-npx skills add Auto-Research-At-Home/skill
+npx skills add OpenResearchh/skill
 
 # Or install only the create skill
-npx skills add Auto-Research-At-Home/skill --skill autoresearch-create
+npx skills add OpenResearchh/skill --skill autoresearch-create
 
 # Create a project from an existing GitHub repo
 > create an autoresearch project from https://github.com/your-org/your-repo
@@ -412,7 +412,7 @@ The create skill includes discovery prompts, schema, questionnaire, baseline run
 Use **`autoresearch-mine`** with a finalized **`protocol.json`** and a checkout of **`meta.repo`**. The skill bundles the same baseline harness pattern as create (`vendor/harness/`), maintains **`.autoresearch/mine/`** (`trials.jsonl`, `network_state.json`), and can optionally read the on-chain best score (`sync_registry_frontier.py`) or submit a proposal (`submit_proposal.py`) using the vendored contract bundle. Install Python chain dependencies only if you use those scripts: **`pip install -r autoresearch-mine/requirements-chain.txt`** (prefer a venv). Environment variables and defaults are documented in [`autoresearch-mine/README.md`](autoresearch-mine/README.md) and [`autoresearch-mine/SKILL.md`](autoresearch-mine/SKILL.md).
 
 ```bash
-npx skills add Auto-Research-At-Home/skill --skill autoresearch-mine
+npx skills add OpenResearchh/skill --skill autoresearch-mine
 ```
 
 ### Repository layout

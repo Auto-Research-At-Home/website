@@ -102,7 +102,7 @@ function EmptyState() {
           <pre className="mx-auto mt-6 inline-block border border-[var(--color-line)] bg-[var(--color-bg)] px-4 py-3 font-mono text-[12.5px] text-[var(--color-fg)]">
             <code>
               <span className="text-[var(--color-fg-dim)]">$ </span>
-              npx skills add Auto-Research-At-Home/skill --skill autoresearch-create
+              npx skills add OpenResearchh/skill --skill autoresearch-create
             </code>
           </pre>
         </div>

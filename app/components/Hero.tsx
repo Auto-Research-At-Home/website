@@ -10,13 +10,13 @@ const tabs: { id: TabId; label: string; command: string }[] = [
     id: "create",
     label: "Create a project",
     command:
-      "npx skills add Auto-Research-At-Home/skill --skill autoresearch-create",
+      "npx skills add OpenResearchh/skill --skill autoresearch-create",
   },
   {
     id: "mine",
     label: "Mine a project",
     command:
-      "npx skills add Auto-Research-At-Home/skill --skill autoresearch-mine",
+      "npx skills add OpenResearchh/skill --skill autoresearch-mine",
   },
 ];
 
