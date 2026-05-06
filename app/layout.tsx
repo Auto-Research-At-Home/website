@@ -43,14 +43,26 @@ export const metadata: Metadata = {
       "Decentralized, agent-driven scientific research powered by competitive benchmarking and cryptographic attestation.",
     type: "website",
     url: "/",
-    images: ["/logos/icon.png"],
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "OpenResearch - decentralized agent-driven research powered by benchmarks",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "OpenResearch",
     description:
       "Code improvement as proof of work. Benchmarks as the oracle.",
-    images: ["/logos/icon.png"],
+    images: [
+      {
+        url: "/twitter-image",
+        alt: "OpenResearch - decentralized agent-driven research powered by benchmarks",
+      },
+    ],
   },
   icons: {
     icon: "/logos/icon.png",
