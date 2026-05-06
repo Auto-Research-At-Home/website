@@ -144,10 +144,11 @@ function ProjectHeader({ project }: { project: ListedProject }) {
           />
         </div>
         <p className="mt-4 max-w-2xl font-sans text-base leading-snug text-[var(--color-fg-muted)] md:text-lg">
-          Immutable benchmark contract on 0G Galileo. The protocol below is
-          fetched live from 0G Storage by its on-chain root hash. Mining this
-          project means beating the current best score and earning{" "}
-          {project.token.symbol} from the miner pool.
+          <span className="text-[var(--color-fg)]">
+            Immutable benchmark contract on 0G Galileo.
+          </span>{" "}
+          Protocol is fetched from 0G Storage by its root hash. Beat the network
+          best to earn {project.token.symbol} from the miner pool.
         </p>
 
         <dl className="mt-10 grid grid-cols-2 gap-x-6 gap-y-6 border-t border-[var(--color-line)] pt-8 md:grid-cols-4">
@@ -424,6 +425,10 @@ function OnChainCard({ project }: { project: ListedProject }) {
 
   return (
     <aside className="lg:sticky lg:top-6 lg:self-start">
+      <MineQuickstart
+        tokenAddress={project.token.address}
+        tokenSymbol={project.token.symbol}
+      />
       <div className="border border-[var(--color-line)] bg-[var(--color-bg-soft)]">
         <div className="border-b border-[var(--color-line)] px-5 py-4">
           <p className="label">On-chain</p>
@@ -544,6 +549,72 @@ function OnChainCard({ project }: { project: ListedProject }) {
         through the public 0G indexer gateway.
       </p>
     </aside>
+  );
+}
+
+function MineQuickstart({
+  tokenAddress,
+  tokenSymbol,
+}: {
+  tokenAddress: string;
+  tokenSymbol: string;
+}) {
+  const install =
+    "npx skills add Auto-Research-At-Home/skill --skill autoresearch-mine";
+  const run = `Start autoresearch mining for ${tokenAddress}`;
+
+  return (
+    <div className="mb-6 border border-[var(--color-line)] bg-[var(--color-bg-soft)]">
+      <div className="border-b border-[var(--color-line)] px-5 py-4">
+        <p className="label">Mine in 60 seconds</p>
+        <p className="mt-1 font-sans text-sm leading-snug text-[var(--color-fg-muted)]">
+          Install the skill, then start mining for {tokenSymbol}. Submit only if
+          you beat the best.
+        </p>
+      </div>
+
+      <div className="space-y-3 px-5 py-4">
+        <CommandRow
+          n="01"
+          label="Install"
+          command={install}
+          copyLabel="Copy mining skill install command"
+        />
+        <CommandRow
+          n="02"
+          label="Run"
+          command={run}
+          copyLabel={`Copy mining start prompt for ${tokenSymbol}`}
+        />
+      </div>
+    </div>
+  );
+}
+
+function CommandRow({
+  n,
+  label,
+  command,
+  copyLabel,
+}: {
+  n: string;
+  label: string;
+  command: string;
+  copyLabel: string;
+}) {
+  return (
+    <div>
+      <p className="label">{`${n} · ${label}`}</p>
+      <div className="mt-2 flex items-center gap-3 border border-[var(--color-line)] bg-[var(--color-bg)] px-4 py-3">
+        <span className="font-mono text-sm text-[var(--color-fg-dim)] select-none">
+          $
+        </span>
+        <code className="flex-1 overflow-x-auto font-mono text-[13px] whitespace-nowrap text-[var(--color-fg)]">
+          {command}
+        </code>
+        <CopyTextButton text={command} label={copyLabel} variant="icon" />
+      </div>
+    </div>
   );
 }
 

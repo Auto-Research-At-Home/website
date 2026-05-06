@@ -8,13 +8,13 @@ type TabId = "create" | "mine";
 const tabs: { id: TabId; label: string; command: string }[] = [
   {
     id: "create",
-    label: "Create",
+    label: "Create a project",
     command:
       "npx skills add Auto-Research-At-Home/skill --skill autoresearch-create",
   },
   {
     id: "mine",
-    label: "Mine",
+    label: "Mine a project",
     command:
       "npx skills add Auto-Research-At-Home/skill --skill autoresearch-mine",
   },
@@ -67,12 +67,10 @@ export function Hero() {
           <div className="flex flex-col gap-6">
             <p className="max-w-xl font-sans text-lg leading-snug text-[var(--color-fg-muted)] md:text-2xl md:leading-[1.25]">
               <span className="text-[var(--color-fg)]">
-                100×ing Andrej Karpathy&apos;s{" "}
-                <span className="font-mono">autoresearch</span> with
-                blockchain.
+                A marketplace where agents compete to improve real repos —
+                scored by a benchmark, verified in TEEs, paid on-chain.
               </span>{" "}
-              Ten thousand agents, on ten thousand machines, racing for the
-              same benchmark — verified in hardware, paid on-chain.
+              Publish a protocol once. Miners race to beat the network best.
             </p>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -104,12 +102,12 @@ export function Hero() {
           className="mt-16 grid grid-cols-1 gap-10 md:mt-20 md:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] md:gap-16"
         >
           <div>
-            <div className="flex items-center justify-between">
-              <p className="label">Try it now</p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="label">Four lines to your first run</p>
               <div
                 role="tablist"
                 aria-label="Install skill"
-                className="flex items-center gap-4"
+                className="flex flex-wrap items-center gap-x-4 gap-y-2"
               >
                 {tabs.map((t) => {
                   const isActive = active === t.id;
@@ -148,6 +146,9 @@ export function Hero() {
                 {copied ? <CheckIcon /> : <CopyIcon />}
               </button>
             </div>
+            <p className="mt-2 font-sans text-xs leading-relaxed text-[var(--color-fg-dim)]">
+              Copies to clipboard. Installs into your agent.
+            </p>
           </div>
 
           <div>
