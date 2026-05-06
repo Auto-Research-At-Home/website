@@ -560,7 +560,7 @@ function MineQuickstart({
   tokenSymbol: string;
 }) {
   const install =
-    "npx skills add Auto-Research-At-Home/skill --skill autoresearch-mine";
+    "npx skills add OpenResearchh/skill --skill autoresearch-mine";
   const run = `Start autoresearch mining for ${tokenAddress}`;
 
   return (

@@ -18,7 +18,7 @@ import { AddressLink } from "../components/AddressLink";
 type SortId = "newest" | "improvement" | "price";
 
 const MINE_INSTALL_CMD =
-  "npx skills add Auto-Research-At-Home/skill --skill autoresearch-mine";
+  "npx skills add OpenResearchh/skill --skill autoresearch-mine";
 
 export function ProjectsDirectory({ projects }: { projects: ListedProject[] }) {
   const [query, setQuery] = useState("");

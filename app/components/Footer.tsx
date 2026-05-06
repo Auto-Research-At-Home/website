@@ -37,7 +37,7 @@ export function Footer() {
             links={[
               { href: "#get-started", label: "Skills" },
               {
-                href: "https://github.com/Auto-Research-At-Home",
+                href: "https://github.com/OpenResearchh",
                 label: "GitHub",
               },
               { href: "https://x.com/OpenResearchh", label: "Twitter" },
