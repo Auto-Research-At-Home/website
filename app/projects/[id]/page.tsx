@@ -1,26 +1,26 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PROJECT_REGISTRY_ADDRESS } from "@/lib/arah/chain";
+import { OPEN_RESEARCH_PROGRAM_ID } from "@/lib/openResearch/client";
 import {
   aggregateDeltaPercent,
   aggregateImprovement,
+  explorerAddressUrl,
   formatAggregateScore,
   formatDate,
+  formatSol,
   formatTokenAmount,
   shortAddress,
   shortHash,
-  ZERO_ADDRESS,
-} from "@/lib/arah/format";
-import { fetchProject, type ListedProject } from "@/lib/arah/registry";
-import { isProjectHiddenInUi } from "@/lib/arah/projectUi";
-import {
-  fetchArtifact,
-  storageFileUrl,
-  ZERO_HASH,
-  type FetchedArtifact,
-} from "@/lib/arah/storage";
-import { renderProtocolMarkdown } from "@/lib/arah/protocolMarkdown";
+  SYSTEM_PROGRAM,
+} from "@/lib/openResearch/format";
+import { ZERO_HASH_HEX } from "@/lib/openResearch/hash";
+import { fetchArtifactByReference, type FetchedArtifact } from "@/lib/openResearch/artifact";
+import { irysUrl } from "@/lib/openResearch/irys";
+import { isProjectHiddenInUi } from "@/lib/openResearch/projectUi";
+import { fetchProject, fetchProjectMint, type ProjectView } from "@/lib/openResearch/read";
+import { renderProtocolMarkdown } from "@/lib/openResearch/protocolMarkdown";
+import { priceAtSupply } from "@/lib/openResearch/trade";
 import { AddressLink } from "../../components/AddressLink";
 import { CopyTextButton } from "../../components/CopyTextButton";
 import { ProjectHeaderActions } from "../../components/ProjectHeaderActions";
@@ -40,12 +40,12 @@ export async function generateMetadata({
   const projectId = Number.parseInt(id, 10);
   if (Number.isNaN(projectId)) return { title: "Project · Not found" };
 
-  const project = await fetchProject(projectId).catch(() => null);
+  const project = await fetchProject(null, projectId).catch(() => null);
   if (!project) return { title: `Project #${id}` };
 
   return {
-    title: `${project.token.name} (${project.token.symbol}) · Project #${project.id}`,
-    description: `On-chain protocol, benchmark, and current best score for ${project.token.name} on the 0G Galileo registry.`,
+    title: `${project.tokenName} (${project.tokenSymbol}) · Project #${project.id}`,
+    description: `On-chain protocol, benchmark, and current best score for ${project.tokenName} on the OpenResearch Solana program.`,
   };
 }
 
@@ -55,13 +55,13 @@ export default async function ProjectViewerPage({ params }: RouteProps) {
   if (!Number.isFinite(projectId) || projectId < 0) notFound();
   if (isProjectHiddenInUi(projectId)) notFound();
 
-  let project: ListedProject | null = null;
+  let project: ProjectView | null = null;
   let registryError: string | null = null;
   try {
-    project = await fetchProject(projectId);
+    project = await fetchProject(null, projectId);
   } catch (e) {
     registryError =
-      e instanceof Error ? e.message : "Failed to read on-chain registry";
+      e instanceof Error ? e.message : "Failed to read OpenResearch program";
   }
 
   if (!project) {
@@ -71,27 +71,38 @@ export default async function ProjectViewerPage({ params }: RouteProps) {
     notFound();
   }
 
-  const protocolArtifact = await fetchArtifact(project.protocolHash).catch(
-    (e): FetchedArtifact => ({
-      kind: "error",
-      message: e instanceof Error ? e.message : "Storage gateway unreachable",
-    }),
-  );
+  const [mintInfo, protocolArtifact] = await Promise.all([
+    fetchProjectMint(null, project.id),
+    fetchArtifactByReference({
+      hash: project.protocolHash,
+      irysId: project.protocolIrysId,
+    }).catch(
+      (e): FetchedArtifact => ({
+        kind: "error",
+        message: e instanceof Error ? e.message : "Irys gateway unreachable",
+      }),
+    ),
+  ]);
 
   return (
     <>
       <Nav />
       <main>
-        <Breadcrumbs id={project.id} symbol={project.token.symbol} />
-        <ProjectHeader project={project} />
-        <ProjectBody project={project} artifact={protocolArtifact} />
+        <Breadcrumbs id={project.id.toString()} symbol={project.tokenSymbol} />
+        <ProjectHeader project={project} totalSupply={mintInfo?.supply ?? 0n} decimals={mintInfo?.decimals ?? 0} />
+        <ProjectBody
+          project={project}
+          totalSupply={mintInfo?.supply ?? 0n}
+          decimals={mintInfo?.decimals ?? 0}
+          artifact={protocolArtifact}
+        />
       </main>
       <Footer />
     </>
   );
 }
 
-function Breadcrumbs({ id, symbol }: { id: number; symbol: string }) {
+function Breadcrumbs({ id, symbol }: { id: string; symbol: string }) {
   return (
     <section className="border-b border-[var(--color-line)]">
       <div className="container-page py-4">
@@ -100,11 +111,11 @@ function Breadcrumbs({ id, symbol }: { id: number; symbol: string }) {
             href="/projects"
             className="underline-offset-4 hover:text-[var(--color-brand-bright)] hover:underline"
           >
-            ← All projects
+            Back to all projects
           </Link>
           <span className="mx-2 text-[var(--color-fg-dim)]">/</span>
           <span className="text-[var(--color-fg-muted)]">
-            #{String(id).padStart(2, "0")} · {symbol}
+            #{id.padStart(2, "0")} · {symbol}
           </span>
         </nav>
       </div>
@@ -112,8 +123,16 @@ function Breadcrumbs({ id, symbol }: { id: number; symbol: string }) {
   );
 }
 
-function ProjectHeader({ project }: { project: ListedProject }) {
-  const isBaseline = project.currentBestMiner === ZERO_ADDRESS;
+function ProjectHeader({
+  project,
+  totalSupply,
+  decimals,
+}: {
+  project: ProjectView;
+  totalSupply: bigint;
+  decimals: number;
+}) {
+  const isBaseline = project.currentBestMiner.toBase58() === SYSTEM_PROGRAM;
   const improvement = aggregateImprovement(
     project.currentBestAggregateScore,
     project.baselineAggregateScore,
@@ -122,33 +141,39 @@ function ProjectHeader({ project }: { project: ListedProject }) {
     project.currentBestAggregateScore,
     project.baselineAggregateScore,
   );
+  const currentPrice = priceAtSupply(project.basePrice, project.slope, totalSupply);
 
   return (
     <section className="border-b border-[var(--color-line)]">
       <div className="container-page py-12 md:py-16">
         <p className="label">
-          Project #{String(project.id).padStart(2, "0")}
+          Project #{project.id.toString().padStart(2, "0")}
         </p>
         <div className="mt-3 flex flex-wrap items-start gap-3 md:gap-4">
           <h1 className="min-w-0 flex-1 font-mono text-[40px] leading-[0.95] font-bold tracking-tight text-[var(--color-fg)] md:text-[56px]">
-            {project.token.name}{" "}
+            {project.tokenName}{" "}
             <span className="text-[var(--color-fg-dim)]">
-              ({project.token.symbol})
+              ({project.tokenSymbol})
             </span>
           </h1>
           <ProjectHeaderActions
-            tokenAddress={project.token.address}
-            tokenSymbol={project.token.symbol}
-            decimals={project.token.decimals}
+            projectId={project.id.toString()}
+            mint={project.mint.toBase58()}
+            tokenSymbol={project.tokenSymbol}
+            decimals={decimals}
+            basePrice={project.basePrice.toString()}
+            slope={project.slope.toString()}
+            totalSupply={totalSupply.toString()}
             className="mt-1 md:mt-2"
           />
         </div>
         <p className="mt-4 max-w-2xl font-sans text-base leading-snug text-[var(--color-fg-muted)] md:text-lg">
           <span className="text-[var(--color-fg)]">
-            Immutable benchmark contract on 0G Galileo.
+            Immutable benchmark project on Solana devnet.
           </span>{" "}
-          Protocol is fetched from 0G Storage by its root hash. Beat the network
-          best to earn {project.token.symbol} from the miner pool.
+          Artifacts are fetched from Irys by their on-chain Irys IDs and
+          pinned alongside SHA-256 hashes. Beat the network best to earn{" "}
+          {project.tokenSymbol} from the miner pool.
         </p>
 
         <dl className="mt-10 grid grid-cols-2 gap-x-6 gap-y-6 border-t border-[var(--color-line)] pt-8 md:grid-cols-4">
@@ -158,10 +183,10 @@ function ProjectHeader({ project }: { project: ListedProject }) {
             sub={`baseline ${formatAggregateScore(project.baselineAggregateScore)}`}
           />
           <Stat
-            label="Δ vs baseline"
+            label="Delta"
             value={
               isBaseline || d === null
-                ? "—"
+                ? "-"
                 : `${d >= 0 ? "+" : ""}${d.toFixed(2)}%`
             }
             sub={isBaseline ? "no proposals yet" : "from network best"}
@@ -172,23 +197,14 @@ function ProjectHeader({ project }: { project: ListedProject }) {
             }
           />
           <Stat
-            label="Buy price"
-            value={project.token.currentPriceDisplay}
-            sub={`supply ${formatTokenAmount(
-              project.token.totalSupply,
-              project.token.decimals,
-            )} ${project.token.symbol}`}
+            label="Next price"
+            value={`${formatSol(currentPrice)} SOL`}
+            sub={`supply ${formatTokenAmount(totalSupply, decimals)} ${project.tokenSymbol}`}
           />
           <Stat
             label="Miner pool"
-            value={`${formatTokenAmount(
-              project.token.minerPoolMinted,
-              project.token.decimals,
-            )} / ${formatTokenAmount(
-              project.token.minerPoolCap,
-              project.token.decimals,
-            )}`}
-            sub={`minted / cap · ${project.token.symbol}`}
+            value={`${formatTokenAmount(project.minerPoolMinted, decimals)} / ${formatTokenAmount(project.minerPoolCap, decimals)}`}
+            sub={`minted / cap · ${project.tokenSymbol}`}
           />
         </dl>
       </div>
@@ -226,17 +242,25 @@ function Stat({
 
 function ProjectBody({
   project,
+  totalSupply,
+  decimals,
   artifact,
 }: {
-  project: ListedProject;
+  project: ProjectView;
+  totalSupply: bigint;
+  decimals: number;
   artifact: FetchedArtifact;
 }) {
   return (
     <section>
       <div className="container-page py-12 md:py-16">
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-12">
-          <ProtocolPanel hash={project.protocolHash} artifact={artifact} />
-          <OnChainCard project={project} />
+          <ProtocolPanel
+            hash={project.protocolHash}
+            irysId={project.protocolIrysId}
+            artifact={artifact}
+          />
+          <OnChainCard project={project} totalSupply={totalSupply} decimals={decimals} />
         </div>
       </div>
     </section>
@@ -245,11 +269,14 @@ function ProjectBody({
 
 function ProtocolPanel({
   hash,
+  irysId,
   artifact,
 }: {
   hash: string;
+  irysId: string | null;
   artifact: FetchedArtifact;
 }) {
+  const url = irysId ? irysUrl(irysId) : "url" in artifact ? artifact.url : null;
   return (
     <article className="min-w-0">
       <header className="flex flex-wrap items-baseline justify-between gap-3 border-b border-[var(--color-line)] pb-4">
@@ -260,19 +287,21 @@ function ProtocolPanel({
           </h2>
         </div>
         <p className="font-mono text-xs text-[var(--color-fg-dim)]">
-          0G Storage ·{" "}
-          {hash === ZERO_HASH ? (
+          Irys ·{" "}
+          {!url && hash === ZERO_HASH_HEX ? (
             <span>not published</span>
-          ) : (
+          ) : url ? (
             <a
-              href={storageFileUrl(hash)}
+              href={url}
               target="_blank"
               rel="noreferrer noopener"
-              title={hash}
+              title={irysId ? `${irysId} · ${hash}` : hash}
               className="underline-offset-4 hover:text-[var(--color-brand-bright)] hover:underline"
             >
-              {shortHash(hash, 10, 6)} ↗
+              {irysId ? shortAddress(irysId) : shortHash(hash, 10, 6)} ↗
             </a>
+          ) : (
+            <span title={hash}>{shortHash(hash, 10, 6)}</span>
           )}
         </p>
       </header>
@@ -296,19 +325,19 @@ function ArtifactRender({
       return (
         <Notice
           title="No protocol artifact yet"
-          body="This project has not published a protocol root hash on-chain. The Statement of Purpose will appear here once the creator uploads it to 0G Storage."
+          body="This project has no retrievable Irys artifact recorded on-chain yet."
         />
       );
     case "error":
       return (
         <Notice
           tone="error"
-          title="Could not load from 0G Storage"
+          title="Could not load from Irys"
           body={artifact.message}
           footer={
-            hash !== ZERO_HASH ? (
+            hash !== ZERO_HASH_HEX && "url" in artifact && artifact.url ? (
               <a
-                href={storageFileUrl(hash)}
+                href={artifact.url}
                 target="_blank"
                 rel="noreferrer noopener"
                 className="font-mono text-xs text-[var(--color-fg-muted)] underline-offset-4 hover:text-[var(--color-brand-bright)] hover:underline"
@@ -323,17 +352,17 @@ function ArtifactRender({
       return (
         <Notice
           title="Binary artifact"
-          body={`The artifact at this root is ${formatBytes(artifact.bytes)} of ${
+          body={`The artifact is ${formatBytes(artifact.bytes)} of ${
             artifact.contentType || "unknown"
           } content and cannot be rendered inline.`}
           footer={
             <a
-              href={storageFileUrl(hash)}
+              href={artifact.url}
               target="_blank"
               rel="noreferrer noopener"
               className="font-mono text-xs text-[var(--color-fg-muted)] underline-offset-4 hover:text-[var(--color-brand-bright)] hover:underline"
             >
-              Download from 0G Storage →
+              Open in Irys gateway →
             </a>
           }
         />
@@ -420,25 +449,34 @@ function Notice({
   );
 }
 
-function OnChainCard({ project }: { project: ListedProject }) {
-  const isBaseline = project.currentBestMiner === ZERO_ADDRESS;
+function OnChainCard({
+  project,
+  totalSupply,
+  decimals,
+}: {
+  project: ProjectView;
+  totalSupply: bigint;
+  decimals: number;
+}) {
+  const isBaseline = project.currentBestMiner.toBase58() === SYSTEM_PROGRAM;
+  const currentPrice = priceAtSupply(project.basePrice, project.slope, totalSupply);
 
   return (
     <aside className="lg:sticky lg:top-6 lg:self-start">
       <MineQuickstart
-        tokenAddress={project.token.address}
-        tokenSymbol={project.token.symbol}
+        mint={project.mint.toBase58()}
+        tokenSymbol={project.tokenSymbol}
       />
       <div className="border border-[var(--color-line)] bg-[var(--color-bg-soft)]">
         <div className="border-b border-[var(--color-line)] px-5 py-4">
           <p className="label">On-chain</p>
           <p className="mt-1 font-mono text-base text-[var(--color-fg)]">
-            0G Galileo · 16602
+            Solana devnet
           </p>
           <p className="mt-1 font-mono text-xs text-[var(--color-fg-dim)]">
-            registry{" "}
+            program{" "}
             <AddressLink
-              address={PROJECT_REGISTRY_ADDRESS}
+              address={OPEN_RESEARCH_PROGRAM_ID.toBase58()}
               className="text-[var(--color-fg-muted)]"
             />
           </p>
@@ -446,74 +484,64 @@ function OnChainCard({ project }: { project: ListedProject }) {
 
         <CardSection title="Token">
           <CardRow
-            label="Address"
+            label="Mint"
             ddClassName="flex min-w-0 flex-wrap items-center justify-end gap-2 text-right font-mono text-xs text-[var(--color-fg-muted)]"
           >
             <span className="min-w-0 truncate">
-              <AddressLink address={project.token.address} />
+              <AddressLink address={project.mint.toBase58()} />
             </span>
             <CopyTextButton
-              text={project.token.address}
-              label="Copy project token contract address"
+              text={project.mint.toBase58()}
+              label="Copy project token mint"
             />
           </CardRow>
           <CardRow label="Name">
             <span className="font-mono text-sm text-[var(--color-fg)]">
-              {project.token.name}
+              {project.tokenName}
             </span>
           </CardRow>
           <CardRow label="Symbol">
             <span className="font-mono text-sm text-[var(--color-fg)]">
-              {project.token.symbol}
+              {project.tokenSymbol}
             </span>
           </CardRow>
           <CardRow label="Decimals">
             <span className="font-mono text-sm text-[var(--color-fg)]">
-              {project.token.decimals}
+              {decimals}
             </span>
           </CardRow>
           <CardRow label="Total supply">
             <span className="font-mono text-sm text-[var(--color-fg)]">
-              {formatTokenAmount(
-                project.token.totalSupply,
-                project.token.decimals,
-              )}{" "}
+              {formatTokenAmount(totalSupply, decimals)}{" "}
               <span className="text-[var(--color-fg-dim)]">
-                {project.token.symbol}
+                {project.tokenSymbol}
               </span>
             </span>
           </CardRow>
-          <CardRow label="Buy price">
+          <CardRow label="Next price">
             <span className="font-mono text-sm text-[var(--color-fg)]">
-              {project.token.currentPriceDisplay}
+              {formatSol(currentPrice)} SOL
             </span>
           </CardRow>
           <CardRow label="Miner pool">
             <span className="font-mono text-sm text-[var(--color-fg)]">
-              {formatTokenAmount(
-                project.token.minerPoolMinted,
-                project.token.decimals,
-              )}{" "}
-              /{" "}
-              {formatTokenAmount(
-                project.token.minerPoolCap,
-                project.token.decimals,
-              )}
+              {formatTokenAmount(project.minerPoolMinted, decimals)} /{" "}
+              {formatTokenAmount(project.minerPoolCap, decimals)}
             </span>
           </CardRow>
         </CardSection>
 
         <CardSection title="People">
           <CardRow label="Creator">
-            <AddressLink address={project.creator} />
+            <AddressLink address={project.creator.toBase58()} />
           </CardRow>
           <CardRow label="Best miner">
             {isBaseline ? (
               <span className="font-mono text-sm text-[var(--color-fg-dim)]">
-                — none yet
+                - none yet
               </span>
             ) : (
-              <AddressLink address={project.currentBestMiner} />
+              <AddressLink address={project.currentBestMiner.toBase58()} />
             )}
           </CardRow>
           <CardRow label="Created">
@@ -523,45 +551,60 @@ function OnChainCard({ project }: { project: ListedProject }) {
           </CardRow>
         </CardSection>
 
-        <CardSection title="0G Storage roots">
-          <HashRow label="Protocol" hash={project.protocolHash} />
-          <HashRow label="Repo snapshot" hash={project.repoSnapshotHash} />
-          <HashRow label="Benchmark" hash={project.benchmarkHash} />
+        <CardSection title="Irys artifacts">
+          <HashRow
+            label="Protocol"
+            hash={project.protocolHash}
+            irysId={project.protocolIrysId}
+          />
+          <HashRow
+            label="Repo snapshot"
+            hash={project.repoSnapshotHash}
+            irysId={project.repoSnapshotIrysId}
+          />
+          <HashRow
+            label="Benchmark"
+            hash={project.benchmarkHash}
+            irysId={project.benchmarkIrysId}
+          />
           <HashRow
             label="Baseline metrics"
             hash={project.baselineMetricsHash}
+            irysId={project.baselineMetricsIrysId}
           />
           <HashRow
             label="Best code"
             hash={project.currentBestCodeHash}
+            irysId={project.currentBestCodeIrysId}
             empty="no proposals yet"
           />
           <HashRow
             label="Best metrics"
             hash={project.currentBestMetricsHash}
+            irysId={project.currentBestMetricsIrysId}
             empty="no proposals yet"
           />
         </CardSection>
       </div>
 
       <p className="mt-3 font-mono text-[11px] leading-relaxed text-[var(--color-fg-dim)]">
-        Hashes are 0G Storage Merkle roots. Click any hash to fetch the file
-        through the public 0G indexer gateway.
+        The program stores 32-byte Irys IDs for retrieval and 32-byte SHA-256
+        hashes for integrity checks.
       </p>
     </aside>
   );
 }
 
 function MineQuickstart({
-  tokenAddress,
+  mint,
   tokenSymbol,
 }: {
-  tokenAddress: string;
+  mint: string;
   tokenSymbol: string;
 }) {
   const install =
     "npx skills add OpenResearchh/skill --skill autoresearch-mine";
-  const run = `Start autoresearch mining for ${tokenAddress}`;
+  const run = `Start autoresearch mining for ${mint}`;
 
   return (
     <div className="mb-6 border border-[var(--color-line)] bg-[var(--color-bg-soft)]">
@@ -640,7 +683,6 @@ function CardRow({
 }: {
   label: string;
   children: React.ReactNode;
-  /** Overrides default `truncate` on `<dd>` when layout needs flex (e.g. copy button). */
   ddClassName?: string;
 }) {
   return (
@@ -661,27 +703,37 @@ function CardRow({
 function HashRow({
   label,
   hash,
+  irysId,
   empty,
 }: {
   label: string;
   hash: string;
+  irysId: string | null;
   empty?: string;
 }) {
-  const isEmpty = !hash || hash === ZERO_HASH;
+  const isEmpty = !irysId && (!hash || hash === ZERO_HASH_HEX);
+  if (isEmpty) {
+    return (
+      <CardRow label={label}>
+        <span className="text-[var(--color-fg-dim)]">{empty ?? "-"}</span>
+      </CardRow>
+    );
+  }
+
   return (
     <CardRow label={label}>
-      {isEmpty ? (
-        <span className="text-[var(--color-fg-dim)]">{empty ?? "—"}</span>
-      ) : (
+      {irysId ? (
         <a
-          href={storageFileUrl(hash)}
+          href={irysUrl(irysId)}
           target="_blank"
           rel="noreferrer noopener"
-          title={hash}
+          title={`${irysId} · ${hash}`}
           className="font-mono text-xs text-[var(--color-fg-muted)] underline-offset-4 hover:text-[var(--color-brand-bright)] hover:underline"
         >
-          {shortAddress(hash)} ↗
+          {shortAddress(irysId)} ↗
         </a>
+      ) : (
+        <span title={hash}>{shortHash(hash, 8, 4)}</span>
       )}
     </CardRow>
   );
@@ -698,17 +750,25 @@ function ErrorPage({
     <>
       <Nav />
       <main>
-        <Breadcrumbs id={projectId} symbol="—" />
+        <Breadcrumbs id={projectId.toString()} symbol="-" />
         <section>
           <div className="container-page py-24">
             <div className="border border-[var(--color-line)] bg-[var(--color-bg-soft)] px-8 py-12">
-              <p className="label">Registry unavailable</p>
+              <p className="label">Program unavailable</p>
               <p className="mt-3 font-sans text-base text-[var(--color-fg)]">
-                Could not read project #{projectId} from the on-chain registry.
+                Could not read project #{projectId} from OpenResearch.
               </p>
               <p className="mt-2 font-mono text-xs text-[var(--color-fg-dim)]">
                 {message}
               </p>
+              <a
+                href={explorerAddressUrl(OPEN_RESEARCH_PROGRAM_ID)}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="mt-6 inline-block font-mono text-xs text-[var(--color-fg-muted)] underline-offset-4 hover:text-[var(--color-brand-bright)] hover:underline"
+              >
+                Open Solana Explorer →
+              </a>
             </div>
           </div>
         </section>

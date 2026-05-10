@@ -5,16 +5,24 @@ import { CopyTextButton } from "./CopyTextButton";
 import { ProjectTradeModal } from "./ProjectTradeModal";
 
 type ProjectHeaderActionsProps = {
-  tokenAddress: `0x${string}`;
+  projectId: string;
+  mint: string;
   tokenSymbol: string;
   decimals: number;
+  basePrice: string;
+  slope: string;
+  totalSupply: string;
   className?: string;
 };
 
 export function ProjectHeaderActions({
-  tokenAddress,
+  projectId,
+  mint,
   tokenSymbol,
   decimals,
+  basePrice,
+  slope,
+  totalSupply,
   className,
 }: ProjectHeaderActionsProps) {
   const [tradeOpen, setTradeOpen] = useState(false);
@@ -26,8 +34,8 @@ export function ProjectHeaderActions({
       >
         <CopyTextButton
           variant="label"
-          text={tokenAddress}
-          label="Copy project token contract address for mining"
+          text={mint}
+          label="Copy project token mint for mining"
           idleLabel="Mine"
           className="!normal-case"
         />
@@ -42,9 +50,13 @@ export function ProjectHeaderActions({
       <ProjectTradeModal
         open={tradeOpen}
         onClose={() => setTradeOpen(false)}
-        tokenAddress={tokenAddress}
+        projectId={projectId}
+        mint={mint}
         tokenSymbol={tokenSymbol}
         decimals={decimals}
+        basePrice={basePrice}
+        slope={slope}
+        totalSupply={totalSupply}
       />
     </>
   );

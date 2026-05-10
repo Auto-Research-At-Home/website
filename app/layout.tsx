@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import { Inter, JetBrains_Mono } from "next/font/google";
-import { cookieToInitialState } from "wagmi";
-import { wagmiConfig } from "@/lib/arah/wagmi";
 import { Web3Provider } from "./web3-provider";
+import "@solana/wallet-adapter-react-ui/styles.css";
 import "./globals.css";
 
 const inter = Inter({
@@ -34,7 +32,8 @@ export const metadata: Metadata = {
     "DeSci",
     "benchmarks",
     "TEE",
-    "0G",
+    "Solana",
+    "Irys",
     "agent skills",
   ],
   openGraph: {
@@ -73,13 +72,10 @@ export const metadata: Metadata = {
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const cookie = (await headers()).get("cookie") ?? undefined;
-  const initialState = cookieToInitialState(wagmiConfig, cookie);
-
   return (
     <html lang="en" className={`${inter.variable} ${jetbrains.variable}`}>
       <body className="min-h-screen antialiased">
-        <Web3Provider initialState={initialState}>{children}</Web3Provider>
+        <Web3Provider>{children}</Web3Provider>
       </body>
     </html>
   );

@@ -1,8 +1,6 @@
-import {
-  PROJECT_REGISTRY_ADDRESS,
-  PROPOSAL_LEDGER_ADDRESS,
-} from "@/lib/arah/chain";
-import { explorerAddressUrl, shortAddress } from "@/lib/arah/format";
+import { OPEN_RESEARCH_PROGRAM_ID } from "@/lib/openResearch/client";
+import { explorerAddressUrl, shortAddress } from "@/lib/openResearch/format";
+import { pdas } from "@/lib/openResearch/pdas";
 import { SectionHeader } from "./HowItWorks";
 
 const layers = [
@@ -34,7 +32,7 @@ const layers = [
     n: "L5",
     name: "Protocol Registry",
     detail:
-      "On-chain index of projects, current best scores, and 0G Storage root hashes.",
+      "Solana program accounts for projects, current best scores, Irys retrieval IDs, and artifact hashes.",
   },
   {
     n: "L6",
@@ -87,19 +85,19 @@ export function Architecture() {
         </div>
 
         <div className="mt-14 grid grid-cols-1 border-t border-[var(--color-line)] sm:grid-cols-3">
-          <DeployRow label="Chain" value="0G Galileo · 16602" />
+          <DeployRow label="Cluster" value="Solana devnet" />
           <DeployRow
-            label="ProjectRegistry"
-            value={shortAddress(PROJECT_REGISTRY_ADDRESS)}
-            href={explorerAddressUrl(PROJECT_REGISTRY_ADDRESS)}
-            title={PROJECT_REGISTRY_ADDRESS}
+            label="Program"
+            value={shortAddress(OPEN_RESEARCH_PROGRAM_ID.toBase58())}
+            href={explorerAddressUrl(OPEN_RESEARCH_PROGRAM_ID)}
+            title={OPEN_RESEARCH_PROGRAM_ID.toBase58()}
             mono
           />
           <DeployRow
-            label="ProposalLedger"
-            value={shortAddress(PROPOSAL_LEDGER_ADDRESS)}
-            href={explorerAddressUrl(PROPOSAL_LEDGER_ADDRESS)}
-            title={PROPOSAL_LEDGER_ADDRESS}
+            label="Config PDA"
+            value={shortAddress(pdas.config().toBase58())}
+            href={explorerAddressUrl(pdas.config())}
+            title={pdas.config().toBase58()}
             mono
           />
         </div>
@@ -133,7 +131,7 @@ function DeployRow({
           href={href}
           target="_blank"
           rel="noreferrer noopener"
-          title={title ?? `View ${value} on 0G Galileo Chainscan`}
+          title={title ?? `View ${value} on Solana Explorer`}
           className={`${valueClass} block underline-offset-4 hover:text-[var(--color-brand-bright)] hover:underline`}
         >
           {value}

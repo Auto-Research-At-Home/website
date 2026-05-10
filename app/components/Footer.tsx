@@ -47,9 +47,9 @@ export function Footer() {
           <FooterCol
             title="Network"
             links={[
-              { href: "https://0g.ai", label: "0G Galileo" },
+              { href: "https://solana.com", label: "Solana devnet" },
+              { href: "https://irys.xyz", label: "Irys" },
               { href: "#architecture", label: "Validators" },
-              { href: "#", label: "Status" },
             ]}
           />
         </div>

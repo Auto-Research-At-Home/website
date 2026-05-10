@@ -2,25 +2,57 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import type { ListedProject } from "@/lib/arah/registry";
 import {
   aggregateDeltaPercent,
   aggregateImprovement,
   formatAggregateScore,
   formatDate,
+  formatSol,
   formatTokenAmount,
   shortHash,
-  ZERO_ADDRESS,
-} from "@/lib/arah/format";
+  SYSTEM_PROGRAM,
+} from "@/lib/openResearch/format";
+import { priceAtSupply } from "@/lib/openResearch/trade";
 import { CopyTextButton } from "../components/CopyTextButton";
 import { AddressLink } from "../components/AddressLink";
+
+export type ProjectListItem = {
+  id: string;
+  createdAt: string;
+  tokenName: string;
+  tokenSymbol: string;
+  mint: string;
+  protocolHash: string;
+  protocolIrysId: string | null;
+  baselineAggregateScore: string;
+  currentBestAggregateScore: string;
+  currentBestMiner: string;
+  totalSupply: string;
+  decimals: number;
+  basePrice: string;
+  slope: string;
+  minerPoolCap: string;
+  minerPoolMinted: string;
+};
 
 type SortId = "newest" | "improvement" | "price";
 
 const MINE_INSTALL_CMD =
   "npx skills add OpenResearchh/skill --skill autoresearch-mine";
 
-export function ProjectsDirectory({ projects }: { projects: ListedProject[] }) {
+function bi(value: string): bigint {
+  return BigInt(value);
+}
+
+function currentPrice(project: ProjectListItem): bigint {
+  return priceAtSupply(
+    bi(project.basePrice),
+    bi(project.slope),
+    bi(project.totalSupply),
+  );
+}
+
+export function ProjectsDirectory({ projects }: { projects: ProjectListItem[] }) {
   const [query, setQuery] = useState("");
   const [onlyWithProposals, setOnlyWithProposals] = useState(false);
   const [sort, setSort] = useState<SortId>("newest");
@@ -28,39 +60,40 @@ export function ProjectsDirectory({ projects }: { projects: ListedProject[] }) {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const out = projects.filter((p) => {
-      if (onlyWithProposals && p.currentBestMiner === ZERO_ADDRESS) return false;
+      if (onlyWithProposals && p.currentBestMiner === SYSTEM_PROGRAM) return false;
       if (!q) return true;
       return (
-        p.token.name.toLowerCase().includes(q) ||
-        p.token.symbol.toLowerCase().includes(q) ||
-        p.token.address.toLowerCase().includes(q)
+        p.tokenName.toLowerCase().includes(q) ||
+        p.tokenSymbol.toLowerCase().includes(q) ||
+        p.mint.toLowerCase().includes(q)
       );
     });
 
-    const sorted = [...out].sort((a, b) => {
-      if (sort === "newest") return b.createdAt.getTime() - a.createdAt.getTime();
+    return [...out].sort((a, b) => {
+      if (sort === "newest") {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
 
       if (sort === "improvement") {
         const ai = aggregateImprovement(
-          a.currentBestAggregateScore,
-          a.baselineAggregateScore,
+          bi(a.currentBestAggregateScore),
+          bi(a.baselineAggregateScore),
         );
-        const bi = aggregateImprovement(
-          b.currentBestAggregateScore,
-          b.baselineAggregateScore,
+        const bj = aggregateImprovement(
+          bi(b.currentBestAggregateScore),
+          bi(b.baselineAggregateScore),
         );
-        if (bi > ai) return 1;
-        if (bi < ai) return -1;
+        if (bj > ai) return 1;
+        if (bj < ai) return -1;
         return 0;
       }
 
-      // sort === "price"
-      if (a.token.currentPriceWei < b.token.currentPriceWei) return -1;
-      if (a.token.currentPriceWei > b.token.currentPriceWei) return 1;
+      const ap = currentPrice(a);
+      const bp = currentPrice(b);
+      if (ap < bp) return -1;
+      if (ap > bp) return 1;
       return 0;
     });
-
-    return sorted;
   }, [projects, query, onlyWithProposals, sort]);
 
   return (
@@ -82,9 +115,9 @@ export function ProjectsDirectory({ projects }: { projects: ListedProject[] }) {
           <p className="label">#</p>
           <p className="label">Project</p>
           <p className="label">Improvement</p>
-          <p className="label">Δ vs baseline</p>
+          <p className="label">Delta</p>
           <p className="label">Supply</p>
-          <p className="label text-right">Buy price</p>
+          <p className="label text-right">Next price</p>
         </div>
 
         {filtered.length === 0 ? (
@@ -112,7 +145,7 @@ function GettingStarted() {
       <p className="label">Getting started</p>
       <p className="mt-3 font-sans text-sm leading-relaxed text-[var(--color-fg-muted)]">
         Install the mining skill once. Then open a project page to start mining
-        for that token address.
+        for that mint.
       </p>
 
       <div className="mt-4 flex items-center gap-3 border border-[var(--color-line)] bg-[var(--color-bg)] px-4 py-3">
@@ -154,7 +187,7 @@ function Controls({
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Name, symbol, or token address…"
+          placeholder="Name, symbol, or mint address..."
           className="mt-2 w-full border border-[var(--color-line)] bg-[var(--color-bg)] px-4 py-3 font-mono text-[13px] text-[var(--color-fg)] placeholder:text-[var(--color-fg-dim)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-line)]"
         />
       </div>
@@ -179,7 +212,7 @@ function Controls({
           >
             <option value="newest">Newest</option>
             <option value="improvement">Best improvement</option>
-            <option value="price">Cheapest buy price</option>
+            <option value="price">Cheapest next price</option>
           </select>
         </div>
       </div>
@@ -187,45 +220,41 @@ function Controls({
   );
 }
 
-function ProjectRow({ project }: { project: ListedProject }) {
-  const improvement = aggregateImprovement(
-    project.currentBestAggregateScore,
-    project.baselineAggregateScore,
-  );
-  const d = aggregateDeltaPercent(
-    project.currentBestAggregateScore,
-    project.baselineAggregateScore,
-  );
-  const isBaseline = project.currentBestMiner === ZERO_ADDRESS;
+function ProjectRow({ project }: { project: ProjectListItem }) {
+  const currentBest = bi(project.currentBestAggregateScore);
+  const baseline = bi(project.baselineAggregateScore);
+  const improvement = aggregateImprovement(currentBest, baseline);
+  const d = aggregateDeltaPercent(currentBest, baseline);
+  const isBaseline = project.currentBestMiner === SYSTEM_PROGRAM;
 
   return (
     <li className="group relative grid cursor-pointer grid-cols-1 gap-3 border-b border-[var(--color-line)] py-6 transition-colors hover:bg-[var(--color-brand-subtle)] md:grid-cols-[60px_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,1fr)] md:items-center md:gap-6 md:py-5">
       <Link
         href={`/projects/${project.id}`}
-        aria-label={`Open ${project.token.name} (${project.token.symbol})`}
+        aria-label={`Open ${project.tokenName} (${project.tokenSymbol})`}
         className="pointer-events-auto absolute inset-0 z-0"
       />
 
       <div className="pointer-events-none relative z-10 font-mono text-sm text-[var(--color-fg-muted)]">
-        {String(project.id).padStart(2, "0")}
+        {project.id.padStart(2, "0")}
       </div>
 
       <div className="pointer-events-none relative z-10 min-w-0">
         <p className="font-mono text-base text-[var(--color-fg)]">
           <Link
             href={`/projects/${project.id}`}
-            className="relative z-20 inline pointer-events-auto text-[var(--color-fg)] underline-offset-4 hover:text-[var(--color-brand-bright)] hover:underline"
+            className="pointer-events-auto relative z-20 inline text-[var(--color-fg)] underline-offset-4 hover:text-[var(--color-brand-bright)] hover:underline"
           >
-            {project.token.name}
+            {project.tokenName}
           </Link>{" "}
           <span className="text-[var(--color-fg-dim)]">
-            ({project.token.symbol})
+            ({project.tokenSymbol})
           </span>
         </p>
         <p className="relative z-10 mt-1 font-mono text-xs text-[var(--color-fg-dim)]">
-          <AddressLink address={project.token.address} />
+          <AddressLink address={project.mint} />
           {" · "}
-          <span title="Created">{formatDate(project.createdAt)}</span>
+          <span title="Created">{formatDate(new Date(project.createdAt))}</span>
         </p>
       </div>
 
@@ -234,13 +263,13 @@ function ProjectRow({ project }: { project: ListedProject }) {
           {formatAggregateScore(improvement)}
         </p>
         <p className="mt-1 text-xs text-[var(--color-fg-dim)]">
-          baseline {formatAggregateScore(project.baselineAggregateScore)}
+          baseline {formatAggregateScore(baseline)}
         </p>
       </div>
 
       <div className="pointer-events-none relative z-10 font-mono text-sm">
         {isBaseline || d === null ? (
-          <span className="text-[var(--color-fg-dim)]">—</span>
+          <span className="text-[var(--color-fg-dim)]">-</span>
         ) : (
           <span
             className={
@@ -259,26 +288,19 @@ function ProjectRow({ project }: { project: ListedProject }) {
       </div>
 
       <div className="pointer-events-none relative z-10 font-mono text-sm text-[var(--color-fg)]">
-        {formatTokenAmount(project.token.totalSupply, project.token.decimals)}{" "}
+        {formatTokenAmount(bi(project.totalSupply), project.decimals)}{" "}
         <span className="text-[var(--color-fg-dim)]">
-          {project.token.symbol}
+          {project.tokenSymbol}
         </span>
         <p className="mt-1 text-xs text-[var(--color-fg-dim)]">
-          pool{" "}
-          {formatTokenAmount(
-            project.token.minerPoolMinted,
-            project.token.decimals,
-          )}
+          pool {formatTokenAmount(bi(project.minerPoolMinted), project.decimals)}
           /
-          {formatTokenAmount(
-            project.token.minerPoolCap,
-            project.token.decimals,
-          )}
+          {formatTokenAmount(bi(project.minerPoolCap), project.decimals)}
         </p>
       </div>
 
       <div className="pointer-events-none relative z-10 font-mono text-sm text-[var(--color-fg)] md:text-right">
-        {project.token.currentPriceDisplay}
+        {formatSol(currentPrice(project))} SOL
         <p className="mt-1 text-xs text-[var(--color-fg-dim)]">
           {shortHash(project.protocolHash, 8, 4)}
         </p>
@@ -286,4 +308,3 @@ function ProjectRow({ project }: { project: ListedProject }) {
     </li>
   );
 }
-
