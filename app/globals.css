@@ -1,33 +1,53 @@
 @import "tailwindcss";
 
 @theme {
-  /* Core dark surfaces */
-  --color-bg: #000000;
-  --color-bg-soft: #0a0a0a;
-  --color-bg-elev: #111111;
-  --color-fg: #ffffff;
-  --color-fg-muted: #8a8a8a;
-  --color-fg-dim: #555555;
-  --color-line: #1c1c1c;
-  --color-line-soft: #141414;
+  /* ----- Surfaces ----- */
+  --color-bg: #07090C;
+  --color-bg-soft: #0C1014;
+  --color-bg-elev: #11161C;
+  --color-bg-2: #0C1014;
+  --color-bg-3: #11161C;
 
-  /* OpenResearch logo — steel blues + sky highlight (tuned for dark UI) */
-  --color-brand: #5b90a8;
-  --color-brand-muted: #4a7588;
-  --color-brand-bright: #8fd4ea;
-  --color-brand-dim: #355d71;
-  --color-brand-subtle: rgb(143 212 234 / 0.1);
-  --color-brand-line: rgb(91 144 168 / 0.35);
+  /* ----- Foreground tiers ----- */
+  --color-fg: oklch(0.96 0.005 240);
+  --color-fg-muted: oklch(0.75 0.01 240);
+  --color-fg-dim: oklch(0.55 0.012 240);
+  --color-fg-4: oklch(0.40 0.012 240);
 
-  /* Semantic accents aligned with brand */
-  --color-cyan: #8fd4ea;
-  --color-blue: #5b90a8;
-  --color-green: #45b5a5;
+  /* ----- Lines (translucent for depth) ----- */
+  --color-line: rgb(255 255 255 / 0.06);
+  --color-line-soft: rgb(255 255 255 / 0.06);
+  --color-line-2: rgb(255 255 255 / 0.10);
+  --color-line-3: rgb(255 255 255 / 0.18);
 
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
-    Consolas, "Liberation Mono", "Courier New", monospace;
+  /* ----- Accents ----- */
+  --color-accent: oklch(0.80 0.14 168);
+  --color-accent-dim: oklch(0.50 0.10 168);
+  --color-cyan: oklch(0.80 0.12 220);
+  --color-amber: oklch(0.85 0.14 78);
+  --color-rose: oklch(0.72 0.16 18);
+  --color-green: oklch(0.80 0.14 168);
+  --color-blue: oklch(0.80 0.12 220);
+
+  /* Brand tokens kept as aliases of the emerald accent so existing
+     consumers still resolve to the right color. */
+  --color-brand: oklch(0.80 0.14 168);
+  --color-brand-bright: oklch(0.88 0.13 168);
+  --color-brand-muted: oklch(0.65 0.10 168);
+  --color-brand-dim: oklch(0.50 0.10 168);
+  --color-brand-subtle: rgb(74 222 188 / 0.08);
+  --color-brand-line: rgb(74 222 188 / 0.35);
+
+  /* ----- Radii ----- */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  /* ----- Fonts ----- */
+  --font-sans: var(--font-geist), -apple-system, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-serif: var(--font-instrument-serif), Georgia, serif;
 }
 
 @layer base {
@@ -39,10 +59,21 @@
   body {
     background-color: var(--color-bg);
     color: var(--color-fg);
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01", "ss02", "cv11";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    min-height: 100vh;
+    overflow-x: hidden;
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(74, 222, 188, 0.05), transparent 60%),
+      radial-gradient(800px 500px at -10% 20%, rgba(96, 165, 250, 0.04), transparent 60%),
+      var(--color-bg);
   }
 
   ::selection {
@@ -61,9 +92,15 @@
 
 @utility container-page {
   width: 100%;
-  max-width: 1200px;
+  max-width: 1320px;
   margin-inline: auto;
-  padding-inline: 1.5rem;
+  padding-inline: 32px;
+}
+
+@media (max-width: 720px) {
+  .container-page {
+    padding-inline: 20px;
+  }
 }
 
 @utility text-balance {
@@ -73,11 +110,154 @@
 @utility label {
   font-family: var(--font-mono);
   font-size: 11px;
+  font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--color-brand-muted);
+  color: var(--color-accent);
+}
+
+@utility label-muted {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-fg-dim);
 }
 
 @utility hairline {
   border-color: var(--color-line);
+}
+
+@utility serif {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+  color: var(--color-accent);
+  letter-spacing: -0.02em;
+}
+
+@utility tick {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+@layer components {
+  /* ----- Tag pills ----- */
+  .or-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border: 1px solid var(--color-line-2);
+    border-radius: 999px;
+    color: var(--color-fg-muted);
+  }
+  .or-tag .dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--color-fg-dim);
+  }
+  .or-tag.live {
+    color: var(--color-accent);
+    border-color: rgb(74 222 188 / 0.3);
+  }
+  .or-tag.live .dot {
+    background: var(--color-accent);
+    animation: or-pulse-soft 1.6s infinite;
+  }
+  @keyframes or-pulse-soft {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ----- Corner crosshairs (relative parent required) ----- */
+  .crosshairs::before,
+  .crosshairs::after,
+  .crosshairs > .ch-bl,
+  .crosshairs > .ch-br {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border: 1px solid var(--color-fg-4);
+    content: "";
+    pointer-events: none;
+  }
+  .crosshairs::before {
+    top: -1px;
+    left: -1px;
+    border-right: 0;
+    border-bottom: 0;
+  }
+  .crosshairs::after {
+    top: -1px;
+    right: -1px;
+    border-left: 0;
+    border-bottom: 0;
+  }
+  .crosshairs > .ch-bl {
+    bottom: -1px;
+    left: -1px;
+    border-right: 0;
+    border-top: 0;
+  }
+  .crosshairs > .ch-br {
+    bottom: -1px;
+    right: -1px;
+    border-left: 0;
+    border-top: 0;
+  }
+
+  /* ----- Hero grid background ----- */
+  .hero-grid-bg {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(to right, var(--color-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--color-line) 1px, transparent 1px);
+    background-size: 80px 80px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 30%, transparent 90%);
+    pointer-events: none;
+  }
+
+  /* ----- Brand mark (orb) ----- */
+  .brand-mark {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #7BC0E0 0%, #2A5F8F 60%, #0E2942 100%);
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--color-line-2);
+    position: relative;
+    overflow: hidden;
+  }
+  .brand-mark::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 70% 30%, rgba(255, 255, 255, 0.5), transparent 40%);
+    mix-blend-mode: overlay;
+  }
+
+  /* ----- Nav cta pulse ----- */
+  .nav-cta-pulse {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-accent);
+    box-shadow: 0 0 0 0 var(--color-accent);
+    animation: or-pulse 2s infinite;
+  }
+  @keyframes or-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(74, 222, 188, 0.5); }
+    70% { box-shadow: 0 0 0 8px rgba(74, 222, 188, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(74, 222, 188, 0); }
+  }
 }

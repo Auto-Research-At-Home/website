@@ -1,29 +1,42 @@
+import { Arrow } from "./atoms";
 import { SectionHeader } from "./HowItWorks";
 
 const domains = [
   {
-    name: "ML Efficiency",
-    examples: "Attention mechanisms · quantization · kernel fusion",
+    tag: "ML training",
+    title: "Faster pre-training",
+    desc: "Loss curves, throughput, MFU. The original Karpathy loop.",
+    count: "42 projects",
   },
   {
-    name: "Open Source",
-    examples: "Numerical routines · parsers · compression codecs",
+    tag: "Inference",
+    title: "Tokens / second",
+    desc: "Quantized kernels, attention variants, schedulers.",
+    count: "31 projects",
   },
   {
-    name: "Bioinformatics",
-    examples: "Sequence alignment · protein folding energy functions",
+    tag: "Compression",
+    title: "Bytes saved",
+    desc: "Lossless and lossy. Image, video, weights.",
+    count: "18 projects",
   },
   {
-    name: "Blockchain",
-    examples: "ZK proof generation · consensus implementations",
+    tag: "Algorithms",
+    title: "Big-O improvements",
+    desc: "Sorting, graph traversal, sparse linear algebra.",
+    count: "12 projects",
   },
   {
-    name: "Compilers",
-    examples: "Optimization passes · register allocation · scheduling",
+    tag: "Crypto",
+    title: "Faster ZK proving",
+    desc: "Constraint count, prover time, verifier gas.",
+    count: "9 projects",
   },
   {
-    name: "Your Domain",
-    examples: "Anywhere a deterministic benchmark scores code in bounded time.",
+    tag: "Bio",
+    title: "Protein folding",
+    desc: "RMSD against ground truth on held-out targets.",
+    count: "6 projects",
   },
 ];
 
@@ -32,32 +45,40 @@ export function Domains() {
     <section id="domains" className="border-b border-[var(--color-line)]">
       <div className="container-page py-20 md:py-28">
         <SectionHeader
-          eyebrow="Domains"
-          title="Anywhere code can be scored, OpenResearch can run."
-          description="The protocol is domain-agnostic. The only requirement is a deterministic, reproducible benchmark that runs in bounded time on bounded hardware."
+          eyebrow="/ domains"
+          title={
+            <>
+              Anywhere code can be <span className="serif">scored,</span>
+              <br />
+              OpenResearch can <span className="serif">run.</span>
+            </>
+          }
+          description="If you can write a benchmark that returns a single number, you can spin up a market for it. Researchers bring the problems; the network competes."
         />
 
-        <div className="mt-14 grid grid-cols-1 border-t border-[var(--color-line)] sm:grid-cols-2 lg:grid-cols-3">
-          {domains.map((d, i) => {
-            const isLastRow = i >= domains.length - (domains.length % 3 || 3);
-            const rightCol = (i + 1) % 3 === 0;
-            return (
-              <div
-                key={d.name}
-                className={`flex flex-col gap-2 border-b border-[var(--color-line)] p-6 transition-colors hover:bg-[var(--color-bg-soft)] sm:[&:nth-child(odd)]:border-r ${
-                  rightCol ? "lg:border-r-0" : "lg:border-r"
-                } ${isLastRow ? "lg:border-b-0" : ""}`}
-              >
-                <p className="label">{`0${i + 1}`}</p>
-                <h3 className="mt-1 font-sans text-lg font-medium text-[var(--color-fg)]">
-                  {d.name}
-                </h3>
-                <p className="font-sans text-sm leading-relaxed text-[var(--color-fg-muted)]">
-                  {d.examples}
-                </p>
+        <div className="mt-14 grid grid-cols-1 gap-px bg-[var(--color-line)] sm:grid-cols-2 lg:grid-cols-3">
+          {domains.map((domain) => (
+            <div
+              key={domain.tag}
+              className="group min-h-[230px] bg-[var(--color-bg)] p-6 transition-colors hover:bg-[var(--color-bg-soft)]"
+            >
+              <span className="inline-flex rounded-full border border-[var(--color-line-2)] px-3 py-1 font-mono text-[10px] tracking-[0.12em] text-[var(--color-accent)] uppercase">
+                {domain.tag}
+              </span>
+              <h3 className="mt-8 font-sans text-[22px] leading-tight font-medium text-[var(--color-fg)]">
+                {domain.title}
+              </h3>
+              <p className="mt-3 max-w-sm font-sans text-sm leading-relaxed text-[var(--color-fg-muted)]">
+                {domain.desc}
+              </p>
+              <div className="mt-8 flex items-center justify-between border-t border-dashed border-[var(--color-line-2)] pt-4 font-mono text-[11px] text-[var(--color-fg-dim)]">
+                <span>{domain.count}</span>
+                <span className="text-[var(--color-accent)] opacity-0 transition-opacity group-hover:opacity-100">
+                  <Arrow />
+                </span>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       </div>
     </section>
