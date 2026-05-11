@@ -27,9 +27,11 @@ export function ProjectHeaderActions({
   const [tradeOpen, setTradeOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const copyMint = useCallback(async () => {
+  const copyMinePrompt = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(mint);
+      await navigator.clipboard.writeText(
+        `Start autoresearch mining for ${mint}`,
+      );
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
@@ -44,9 +46,9 @@ export function ProjectHeaderActions({
       >
         <button
           type="button"
-          onClick={copyMint}
+          onClick={copyMinePrompt}
           className="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 font-mono text-[12px] text-[var(--color-brand-muted)] transition-colors hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand-bright)]"
-          title="Copy project token mint for mining"
+          title={`Copy mining prompt for ${tokenSymbol}`}
         >
           {copied ? <CheckIcon /> : <MineIcon />}
           {copied ? "Copied" : "Mine"}

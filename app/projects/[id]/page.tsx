@@ -3,16 +3,21 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OPEN_RESEARCH_PROGRAM_ID } from "@/lib/openResearch/client";
 import {
-  aggregateDeltaPercent,
-  aggregateImprovement,
+  DEFAULT_PRIMARY_METRIC,
   explorerAddressUrl,
   formatAggregateScore,
   formatDate,
   formatSol,
   formatTokenAmount,
+  metricDeltaPercent,
+  metricDirectionLabel,
+  metricImprovement,
+  metricValueFromAggregateScore,
+  primaryMetricFromProtocol,
   shortAddress,
   shortHash,
   SYSTEM_PROGRAM,
+  type PrimaryMetric,
 } from "@/lib/openResearch/format";
 import { ZERO_HASH_HEX } from "@/lib/openResearch/hash";
 import { fetchArtifactByReference, type FetchedArtifact } from "@/lib/openResearch/artifact";
@@ -153,13 +158,21 @@ function ProjectHeader({
   proposalCount: number;
 }) {
   const isBaseline = project.currentBestMiner.toBase58() === SYSTEM_PROGRAM;
-  const improvement = aggregateImprovement(
+  const metric = metricFromArtifact(artifact);
+  const currentMetric = metricValueFromAggregateScore(
     project.currentBestAggregateScore,
     project.baselineAggregateScore,
+    metric,
   );
-  const d = aggregateDeltaPercent(
+  const improvement = metricImprovement(
     project.currentBestAggregateScore,
     project.baselineAggregateScore,
+    metric,
+  );
+  const d = metricDeltaPercent(
+    project.currentBestAggregateScore,
+    project.baselineAggregateScore,
+    metric,
   );
   const currentPrice = priceAtSupply(project.basePrice, project.slope, totalSupply);
   const description = projectDescription(artifact);
@@ -204,9 +217,9 @@ function ProjectHeader({
 
         <dl className="mt-10 grid grid-cols-2 gap-x-6 gap-y-6 border-t border-[var(--color-line)] pt-8 md:grid-cols-4">
           <Stat
-            label="Improvement"
-            value={formatAggregateScore(improvement)}
-            sub={`baseline ${formatAggregateScore(project.baselineAggregateScore)}`}
+            label="Best metric"
+            value={formatAggregateScore(currentMetric)}
+            sub={`baseline ${formatAggregateScore(project.baselineAggregateScore)} · ${metric.name} ${metricDirectionLabel(metric)}`}
           />
           <Stat
             label="Delta"
@@ -215,7 +228,11 @@ function ProjectHeader({
                 ? "-"
                 : `${d >= 0 ? "+" : ""}${d.toFixed(2)}%`
             }
-            sub={isBaseline ? "no proposals yet" : "from network best"}
+            sub={
+              isBaseline
+                ? "no proposals yet"
+                : `${formatAggregateScore(improvement)} raw gain`
+            }
             valueClassName={
               !isBaseline && d !== null && d >= 0
                 ? "text-[var(--color-green)]"
@@ -290,12 +307,18 @@ function ProjectBody({
   artifact: FetchedArtifact;
   proposals: ProposalView[];
 }) {
+  const metric = metricFromArtifact(artifact);
+
   return (
     <section>
       <div className="container-page py-12 md:py-16">
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-12">
           <div className="space-y-10">
-            <BenchmarkTrackRecord project={project} proposals={proposals} />
+            <BenchmarkTrackRecord
+              project={project}
+              proposals={proposals}
+              metric={metric}
+            />
             <ProtocolPanel
               hash={project.protocolHash}
               irysId={project.protocolIrysId}
@@ -307,6 +330,7 @@ function ProjectBody({
             totalSupply={totalSupply}
             decimals={decimals}
             proposals={proposals}
+            metric={metric}
           />
         </div>
       </div>
@@ -338,6 +362,11 @@ function projectDescription(artifact: FetchedArtifact) {
     title: rawTitle || fallback.title,
     body: rawBody || fallback.body,
   };
+}
+
+function metricFromArtifact(artifact: FetchedArtifact): PrimaryMetric {
+  if (artifact.kind !== "json") return DEFAULT_PRIMARY_METRIC;
+  return primaryMetricFromProtocol(artifact.data);
 }
 
 function firstString(data: Record<string, unknown>, keys: string[]) {
@@ -498,9 +527,11 @@ function JsonView({ data, raw }: { data: unknown; raw: string }) {
 function BenchmarkTrackRecord({
   project,
   proposals,
+  metric,
 }: {
   project: ProjectView;
   proposals: ProposalView[];
+  metric: PrimaryMetric;
 }) {
   const sorted = [...proposals].sort(
     (a, b) => a.submittedAt.getTime() - b.submittedAt.getTime(),
@@ -557,7 +588,11 @@ function BenchmarkTrackRecord({
 
       <div className="grid grid-cols-1 gap-0 lg:grid-cols-[minmax(0,1fr)_220px]">
         <div className="border-b border-[var(--color-line)] p-5 lg:border-r lg:border-b-0">
-          <ScorePath points={points} />
+          <ScorePath
+            points={points}
+            baselineAggregateScore={project.baselineAggregateScore}
+            metric={metric}
+          />
         </div>
         <div className="p-5">
           <ContributionGrid proposals={proposals} />
@@ -569,8 +604,12 @@ function BenchmarkTrackRecord({
 
 function ScorePath({
   points,
+  baselineAggregateScore,
+  metric,
 }: {
   points: { label: string; score: bigint; date: Date; miner: string }[];
+  baselineAggregateScore: bigint;
+  metric: PrimaryMetric;
 }) {
   const values = points.map((point) => Number(point.score));
   const min = Math.min(...values);
@@ -625,7 +664,13 @@ function ScorePath({
                 {point.label}
               </p>
               <p className="font-mono text-xs text-[var(--color-accent)]">
-                {formatAggregateScore(point.score)}
+                {formatAggregateScore(
+                  metricValueFromAggregateScore(
+                    point.score,
+                    baselineAggregateScore,
+                    metric,
+                  ),
+                )}
               </p>
             </div>
             <p className="mt-1 font-mono text-[11px] text-[var(--color-fg-dim)]">
@@ -718,14 +763,21 @@ function OnChainCard({
   totalSupply,
   decimals,
   proposals,
+  metric,
 }: {
   project: ProjectView;
   totalSupply: bigint;
   decimals: number;
   proposals: ProposalView[];
+  metric: PrimaryMetric;
 }) {
   const isBaseline = project.currentBestMiner.toBase58() === SYSTEM_PROGRAM;
   const currentPrice = priceAtSupply(project.basePrice, project.slope, totalSupply);
+  const currentMetric = metricValueFromAggregateScore(
+    project.currentBestAggregateScore,
+    project.baselineAggregateScore,
+    metric,
+  );
 
   return (
     <aside className="lg:sticky lg:top-6 lg:self-start">
@@ -748,6 +800,34 @@ function OnChainCard({
             />
           </p>
         </div>
+
+        <CardSection title="Score">
+          <CardRow label="Metric">
+            <span className="font-mono text-sm text-[var(--color-fg)]">
+              {metric.name}
+            </span>
+          </CardRow>
+          <CardRow label="Direction">
+            <span className="font-mono text-sm text-[var(--color-fg)]">
+              {metric.direction}
+            </span>
+          </CardRow>
+          <CardRow label="Baseline metric">
+            <span className="font-mono text-sm text-[var(--color-fg)]">
+              {formatAggregateScore(project.baselineAggregateScore)}
+            </span>
+          </CardRow>
+          <CardRow label="Best metric">
+            <span className="font-mono text-sm text-[var(--color-fg)]">
+              {formatAggregateScore(currentMetric)}
+            </span>
+          </CardRow>
+          <CardRow label="Aggregate score">
+            <span className="font-mono text-sm text-[var(--color-fg)]">
+              {formatAggregateScore(project.currentBestAggregateScore)}
+            </span>
+          </CardRow>
+        </CardSection>
 
         <CardSection title="Token">
           <CardRow
