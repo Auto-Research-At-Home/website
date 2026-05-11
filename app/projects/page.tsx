@@ -33,7 +33,6 @@ export default async function ProjectsPage() {
     <>
       <Nav />
       <main>
-        <Header projects={projects} error={error} />
         {error ? (
           <ErrorState message={error} />
         ) : projects.length === 0 ? (
@@ -41,13 +40,14 @@ export default async function ProjectsPage() {
         ) : (
           <ProjectsDirectory projects={projects} />
         )}
+        <NetworkSummary projects={projects} error={error} />
       </main>
       <Footer />
     </>
   );
 }
 
-function Header({
+function NetworkSummary({
   projects,
   error,
 }: {
@@ -55,17 +55,17 @@ function Header({
   error: string | null;
 }) {
   return (
-    <section className="relative overflow-hidden border-b border-[var(--color-line)]">
+    <section className="relative overflow-hidden border-b border-[var(--color-line)] bg-[var(--color-bg-soft)]">
       <div className="hero-grid-bg" />
       <div className="container-page relative py-16 md:py-20">
         <div className="grid grid-cols-1 items-end gap-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-16">
           <div>
             <p className="label">/ network · live</p>
-            <h1 className="mt-5 text-balance font-sans text-[52px] leading-[0.95] font-medium tracking-tight text-[var(--color-fg)] md:text-[88px]">
+            <h2 className="mt-5 text-balance font-sans text-[40px] leading-[1] font-medium tracking-tight text-[var(--color-fg)] md:text-[56px]">
               Live projects,{" "}
               <span className="serif">live miners.</span>
-            </h1>
-            <p className="mt-6 max-w-2xl font-sans text-base leading-relaxed text-[var(--color-fg-muted)] md:text-lg">
+            </h2>
+            <p className="mt-5 max-w-2xl font-sans text-base leading-relaxed text-[var(--color-fg-muted)]">
               {error ? (
                 "Network unreachable"
               ) : (
@@ -130,18 +130,21 @@ function NetStats({ projects }: { projects: ProjectListItem[] }) {
       {stats.map((stat, i) => (
         <div
           key={stat.label}
-          className={`min-h-[112px] border-[var(--color-line)] px-5 py-5 ${
+          className={`net-stat group relative min-h-[112px] border-[var(--color-line)] px-5 py-5 transition-colors hover:bg-[rgb(255_255_255_/_0.02)] ${
             i % 2 === 0 ? "border-r" : ""
           } ${i < 4 ? "border-b xl:border-b-0" : ""} md:border-r md:[&:nth-child(3n)]:border-r-0 xl:[&:nth-child(3n)]:border-r xl:last:border-r-0`}
         >
-          <span className="label-muted text-[10px]">{stat.label}</span>
+          <span className="font-mono text-[10px] font-medium tracking-[0.16em] text-[var(--color-fg-muted)] uppercase">
+            {stat.label}
+          </span>
           <span
-            className={`tick mt-3 block text-[22px] font-medium tracking-tight ${
+            className={`tick mt-3 block text-[26px] font-medium tracking-tight ${
               stat.up ? "text-[var(--color-accent)]" : "text-[var(--color-fg)]"
             }`}
           >
             {stat.value}
           </span>
+          <span className="net-stat-bar" aria-hidden="true" />
         </div>
       ))}
     </div>

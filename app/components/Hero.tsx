@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Arrow, Crosshairs, ExternalArrow } from "./atoms";
 import { FlowDiagram } from "./FlowDiagram";
 
@@ -21,14 +21,19 @@ const tabs: { id: TabId; label: string; command: string }[] = [
   },
 ];
 
-const agents = [
-  { name: "Cursor", icon: "/agents/cursor.svg" },
-  { name: "Claude Code", icon: "/agents/claude.svg" },
-  { name: "Codex", icon: null },
-  { name: "GitHub Copilot", icon: "/agents/copilot.svg" },
-  { name: "Cline", icon: "/agents/cline.svg" },
-  { name: "Windsurf", icon: "/agents/windsurf.svg" },
-  { name: "Gemini", icon: "/agents/gemini.svg" },
+const agents: {
+  name: string;
+  icon: string | null;
+  color: string;
+  border: string;
+}[] = [
+  { name: "Cursor", icon: "/agents/cursor.svg", color: "#FFFFFF", border: "rgb(255 255 255 / 0.45)" },
+  { name: "Claude Code", icon: "/agents/claude.svg", color: "#D97757", border: "rgb(217 119 87 / 0.5)" },
+  { name: "Codex", icon: null, color: "#10A37F", border: "rgb(16 163 127 / 0.55)" },
+  { name: "GitHub Copilot", icon: "/agents/copilot.svg", color: "#79C0FF", border: "rgb(121 192 255 / 0.55)" },
+  { name: "Cline", icon: "/agents/cline.svg", color: "#C084FC", border: "rgb(192 132 252 / 0.55)" },
+  { name: "Windsurf", icon: "/agents/windsurf.svg", color: "#22D3EE", border: "rgb(34 211 238 / 0.55)" },
+  { name: "Gemini", icon: "/agents/gemini.svg", color: "#60A5FA", border: "rgb(96 165 250 / 0.55)" },
 ];
 
 export type HeroStats = {
@@ -134,7 +139,32 @@ function InstallBand() {
   const [active, setActive] = useState<TabId>("create");
   const [copied, setCopied] = useState(false);
   const [commandPulse, setCommandPulse] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+  const bandRef = useRef<HTMLDivElement | null>(null);
   const current = tabs.find((t) => t.id === active)!;
+
+  useEffect(() => {
+    const node = bandRef.current;
+    if (!node) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setRevealed(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            setRevealed(true);
+            observer.disconnect();
+            break;
+          }
+        }
+      },
+      { threshold: 0.18, rootMargin: "0px 0px -10% 0px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   const setMode = (id: TabId) => {
     if (id === active) return;
@@ -159,12 +189,18 @@ function InstallBand() {
   return (
     <div
       id="get-started"
-      className="mt-12 border-y border-[var(--color-line)] md:mt-16"
+      ref={bandRef}
+      data-revealed={revealed ? "true" : "false"}
+      className="install-band relative mt-12 rounded-[10px] border border-[var(--color-line-2)] bg-[linear-gradient(180deg,rgb(255_255_255_/_0.014),transparent_70%),var(--color-bg-soft)] md:mt-16"
     >
+      <span className="install-band-sweep" aria-hidden="true" />
       <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
-        <div className="min-w-0 border-b border-[var(--color-line)] p-6 md:border-r md:border-b-0 md:p-8">
+        <div className="install-cell min-w-0 border-b border-[var(--color-line)] p-6 md:border-r md:border-b-0 md:p-8" style={{ "--cell-delay": "0ms" } as React.CSSProperties}>
           <div className="flex flex-wrap items-center justify-between gap-4">
-            <p className="label text-[var(--color-cyan)]">Try it now</p>
+            <p className="label flex items-center gap-2 text-[var(--color-accent)]">
+              <span className="install-cell-dot" aria-hidden="true" />
+              Try it now · start here
+            </p>
             <div role="tablist" aria-label="Install skill" className="flex gap-1">
               {tabs.map((tab) => (
                 <button
@@ -208,7 +244,7 @@ function InstallBand() {
           </div>
         </div>
 
-        <div className="p-6 md:p-8">
+        <div className="install-cell p-6 md:p-8" style={{ "--cell-delay": "90ms" } as React.CSSProperties}>
           <p className="label text-[var(--color-cyan)]">
             Available for these agents
           </p>
@@ -216,17 +252,29 @@ function InstallBand() {
             {agents.map((agent) => (
               <li
                 key={agent.name}
-                className="group grid aspect-square place-items-center rounded-[6px] border border-[var(--color-line-2)] bg-[rgb(255_255_255_/_0.02)] transition hover:-translate-y-px hover:border-[var(--color-line-3)] hover:bg-[rgb(255_255_255_/_0.04)]"
+                className="agent-tile group grid aspect-square place-items-center rounded-[6px] border border-[var(--color-line-2)] bg-[rgb(255_255_255_/_0.02)] transition hover:-translate-y-px hover:bg-[rgb(255_255_255_/_0.04)]"
+                style={
+                  {
+                    "--agent-color": agent.color,
+                    "--agent-border": agent.border,
+                  } as React.CSSProperties
+                }
                 title={agent.name}
               >
                 {agent.icon ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={agent.icon}
-                    alt={agent.name}
-                    width={22}
-                    height={22}
-                    className="h-[46%] w-[46%] opacity-60 transition-opacity group-hover:opacity-100"
+                  <span
+                    aria-label={agent.name}
+                    className="agent-icon block h-[46%] w-[46%] bg-[rgb(255_255_255_/_0.6)] transition-colors duration-200 group-hover:bg-[var(--agent-color)]"
+                    style={{
+                      WebkitMaskImage: `url(${agent.icon})`,
+                      maskImage: `url(${agent.icon})`,
+                      WebkitMaskRepeat: "no-repeat",
+                      maskRepeat: "no-repeat",
+                      WebkitMaskPosition: "center",
+                      maskPosition: "center",
+                      WebkitMaskSize: "contain",
+                      maskSize: "contain",
+                    }}
                   />
                 ) : (
                   <CodexMark />
@@ -242,7 +290,8 @@ function InstallBand() {
           href="https://x.com/techtusharojha/status/2052244533774090301?s=20"
           target="_blank"
           rel="noreferrer noopener"
-          className="group relative flex items-center gap-5 border-b border-[var(--color-line)] p-6 transition-colors hover:bg-[rgb(255_255_255_/_0.02)] md:border-r md:border-b-0 md:p-8"
+          style={{ "--cell-delay": "180ms" } as React.CSSProperties}
+          className="install-cell group relative flex items-center gap-5 border-b border-[var(--color-line)] p-6 transition-colors hover:bg-[rgb(255_255_255_/_0.02)] md:border-r md:border-b-0 md:p-8"
         >
           <Image
             src="/partners/karpathy.png"
@@ -262,7 +311,7 @@ function InstallBand() {
           </span>
         </a>
 
-        <div className="relative flex items-center gap-5 p-6 md:p-8">
+        <div className="install-cell relative flex items-center gap-5 p-6 md:p-8" style={{ "--cell-delay": "270ms" } as React.CSSProperties}>
           <span className="relative grid size-14 shrink-0 place-items-center rounded-full border border-[var(--color-line-2)] bg-[rgb(74_222_188_/_0.04)]">
             <span className="absolute inset-1.5 animate-ping rounded-full border border-[rgb(74_222_188_/_0.35)]" />
             <Image
@@ -296,7 +345,7 @@ function CodexMark() {
       height="22"
       fill="currentColor"
       aria-hidden="true"
-      className="h-[46%] w-[46%] text-[var(--color-fg)] opacity-60 transition-opacity group-hover:opacity-100"
+      className="h-[46%] w-[46%] text-[rgb(255_255_255_/_0.6)] transition-colors duration-200 group-hover:text-[var(--agent-color)]"
     >
       <path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.075.075 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.075.075 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08-4.778 2.758a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v3l-2.597 1.5-2.607-1.5z" />
     </svg>

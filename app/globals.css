@@ -246,6 +246,283 @@
     mix-blend-mode: overlay;
   }
 
+  /* ----- Domain cards ----- */
+  .domain-card {
+    transition: background-color 220ms ease, transform 320ms ease, box-shadow 320ms ease;
+    isolation: isolate;
+  }
+  .domain-gif {
+    z-index: 0;
+    opacity: 0;
+    filter: blur(14px) saturate(1.1) contrast(0.95);
+    transform: scale(1.12);
+    transition: opacity 420ms ease, filter 420ms ease, transform 700ms ease;
+  }
+  .domain-card:hover .domain-gif {
+    opacity: 0.56;
+    filter: blur(4px) saturate(1.2) contrast(1.05);
+    transform: scale(1.02);
+  }
+  .domain-gif-veil {
+    z-index: 1;
+    background:
+      linear-gradient(180deg, rgba(7, 9, 12, 0.35) 0%, rgba(7, 9, 12, 0.62) 100%),
+      linear-gradient(90deg, var(--color-bg) 0%, rgba(7, 9, 12, 0.45) 50%, rgba(7, 9, 12, 0.12) 100%);
+    opacity: 0;
+    transition: opacity 420ms ease;
+  }
+  .domain-card:hover .domain-gif-veil {
+    opacity: 1;
+  }
+  .domain-card:hover .domain-viz {
+    opacity: 0;
+  }
+  .domain-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 24px 50px -32px var(--accent-glow, transparent);
+  }
+  .domain-card-accent {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 2px;
+    width: 100%;
+    background: linear-gradient(to right, var(--accent, transparent), transparent 70%);
+    opacity: 0.5;
+    transition: opacity 220ms ease, height 220ms ease;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .domain-viz {
+    z-index: 1;
+  }
+  .domain-card:hover .domain-card-accent {
+    opacity: 1;
+    height: 3px;
+  }
+  .domain-icon {
+    transition: transform 320ms ease, box-shadow 320ms ease;
+  }
+  .domain-card:hover .domain-icon {
+    transform: rotate(-4deg) scale(1.06);
+    box-shadow: 0 0 0 4px var(--accent-bg);
+  }
+  .domain-viz {
+    transition: opacity 320ms ease, transform 320ms ease;
+  }
+  .domain-card:hover .domain-viz {
+    transform: translateX(-2px);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .domain-card { transition: none; }
+    .domain-card:hover { transform: none; }
+    .domain-icon { transition: none; }
+  }
+
+  /* ----- Network stats cells ----- */
+  .net-stat-bar {
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--color-accent), transparent);
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform 320ms ease;
+    pointer-events: none;
+  }
+  .net-stat:hover .net-stat-bar {
+    transform: scaleX(1);
+  }
+
+  /* ----- Projects table readability ----- */
+  .projects-table {
+    border-radius: 6px;
+  }
+  .projects-table thead th {
+    color: var(--color-fg-muted);
+  }
+  .project-row {
+    transition: background-color 220ms ease, box-shadow 220ms ease;
+  }
+  .project-row:hover {
+    background-color: rgb(74 222 188 / 0.05);
+    box-shadow: inset 0 0 0 1px rgb(74 222 188 / 0.08);
+  }
+  .project-row-edge {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 2px;
+    background: var(--color-accent);
+    transform: scaleY(0);
+    transform-origin: top center;
+    transition: transform 220ms ease;
+    pointer-events: none;
+  }
+  .project-row:hover .project-row-edge {
+    transform: scaleY(1);
+  }
+
+  /* ----- HowItWorks role cards ----- */
+  .role-card {
+    transition: background-color 220ms ease, transform 320ms ease, box-shadow 320ms ease;
+  }
+  .role-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 40px -28px var(--accent-glow, transparent);
+  }
+  .role-card-accent {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 2px;
+    width: 100%;
+    background: linear-gradient(to right, var(--accent, transparent), transparent);
+    opacity: 0.55;
+    transition: opacity 220ms ease, height 220ms ease;
+    pointer-events: none;
+  }
+  .role-card:hover .role-card-accent {
+    opacity: 1;
+    height: 3px;
+  }
+  .role-icon {
+    transition: transform 320ms ease, box-shadow 320ms ease;
+  }
+  .role-card:hover .role-icon {
+    transform: rotate(-4deg) scale(1.05);
+    box-shadow: 0 0 0 4px var(--accent-bg);
+  }
+  .role-io-arrow {
+    color: var(--color-fg-dim);
+    transition: color 220ms ease, transform 320ms ease;
+  }
+  .role-card:hover .role-io-arrow {
+    color: var(--accent);
+    transform: translateX(2px);
+  }
+
+  .flow-spine-dot {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-accent);
+    box-shadow: 0 0 12px rgba(74, 222, 188, 0.55);
+    transform: translate(0, -50%);
+    animation: flow-spine-move 6s ease-in-out infinite;
+  }
+  @keyframes flow-spine-move {
+    0% { left: 6%; opacity: 0; }
+    8% { opacity: 1; }
+    92% { opacity: 1; }
+    100% { left: 94%; opacity: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flow-spine-dot { animation: none; left: 50%; }
+    .role-card { transition: none; }
+    .role-card:hover { transform: none; }
+  }
+
+  /* ----- Install band attention ----- */
+  .install-band {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    transition: box-shadow 600ms ease, border-color 600ms ease;
+  }
+  .install-band[data-revealed="true"] {
+    border-color: rgb(74 222 188 / 0.22);
+    box-shadow:
+      0 0 0 1px rgb(74 222 188 / 0.06) inset,
+      0 24px 60px -40px rgb(74 222 188 / 0.45);
+    animation: install-band-breath 6s ease-in-out 800ms infinite;
+  }
+  @keyframes install-band-breath {
+    0%, 100% { box-shadow: 0 0 0 1px rgb(74 222 188 / 0.06) inset, 0 24px 60px -40px rgb(74 222 188 / 0.35); }
+    50% { box-shadow: 0 0 0 1px rgb(74 222 188 / 0.12) inset, 0 28px 80px -38px rgb(74 222 188 / 0.55); }
+  }
+
+  .install-band-sweep {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background: linear-gradient(
+      110deg,
+      transparent 0%,
+      transparent 35%,
+      rgba(74, 222, 188, 0.08) 50%,
+      transparent 65%,
+      transparent 100%
+    );
+    transform: translateX(-120%);
+    opacity: 0;
+  }
+  .install-band[data-revealed="true"] .install-band-sweep {
+    animation: install-band-sweep 1.6s ease-out 220ms 1 forwards;
+  }
+  @keyframes install-band-sweep {
+    0% { transform: translateX(-120%); opacity: 0; }
+    20% { opacity: 1; }
+    100% { transform: translateX(120%); opacity: 0; }
+  }
+
+  .install-cell-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-accent);
+    box-shadow: 0 0 0 0 rgba(74, 222, 188, 0.55);
+    animation: or-pulse 1.8s infinite;
+  }
+
+  .install-cell {
+    position: relative;
+    z-index: 1;
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity 600ms ease var(--cell-delay, 0ms), transform 600ms ease var(--cell-delay, 0ms);
+  }
+  .install-band[data-revealed="true"] .install-cell {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .install-cell { transition: none; opacity: 1; transform: none; }
+    .install-band[data-revealed="true"] { animation: none; }
+    .install-band-sweep { display: none; }
+  }
+
+  /* ----- Agent icon tiles ----- */
+  .agent-tile {
+    position: relative;
+    overflow: hidden;
+    transition: border-color 200ms ease, background-color 200ms ease, transform 200ms ease, box-shadow 220ms ease;
+  }
+  .agent-tile::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle at 50% 120%, var(--agent-color, transparent) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 220ms ease;
+    pointer-events: none;
+    mix-blend-mode: screen;
+  }
+  .agent-tile:hover {
+    border-color: var(--agent-border, var(--color-line-3));
+    box-shadow: 0 0 0 1px var(--agent-border, transparent), 0 8px 24px -16px var(--agent-color, transparent);
+  }
+  .agent-tile:hover::after {
+    opacity: 0.18;
+  }
+
   /* ----- Nav cta pulse ----- */
   .nav-cta-pulse {
     width: 6px;
