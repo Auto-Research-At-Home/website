@@ -249,6 +249,33 @@
   /* ----- Domain cards ----- */
   .domain-card {
     transition: background-color 220ms ease, transform 320ms ease, box-shadow 320ms ease;
+    isolation: isolate;
+  }
+  .domain-gif {
+    z-index: 0;
+    opacity: 0;
+    filter: blur(14px) saturate(1.1) contrast(0.95);
+    transform: scale(1.12);
+    transition: opacity 420ms ease, filter 420ms ease, transform 700ms ease;
+  }
+  .domain-card:hover .domain-gif {
+    opacity: 0.56;
+    filter: blur(4px) saturate(1.2) contrast(1.05);
+    transform: scale(1.02);
+  }
+  .domain-gif-veil {
+    z-index: 1;
+    background:
+      linear-gradient(180deg, rgba(7, 9, 12, 0.35) 0%, rgba(7, 9, 12, 0.62) 100%),
+      linear-gradient(90deg, var(--color-bg) 0%, rgba(7, 9, 12, 0.45) 50%, rgba(7, 9, 12, 0.12) 100%);
+    opacity: 0;
+    transition: opacity 420ms ease;
+  }
+  .domain-card:hover .domain-gif-veil {
+    opacity: 1;
+  }
+  .domain-card:hover .domain-viz {
+    opacity: 0;
   }
   .domain-card:hover {
     transform: translateY(-2px);
@@ -264,6 +291,10 @@
     opacity: 0.5;
     transition: opacity 220ms ease, height 220ms ease;
     pointer-events: none;
+    z-index: 2;
+  }
+  .domain-viz {
+    z-index: 1;
   }
   .domain-card:hover .domain-card-accent {
     opacity: 1;

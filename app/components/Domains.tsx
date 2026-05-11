@@ -57,6 +57,7 @@ type Domain = {
   accent: DomainAccent;
   Icon: (props: SVGProps<SVGSVGElement>) => React.ReactNode;
   Viz: (props: { color: string }) => React.ReactNode;
+  gifQuery: string;
 };
 
 const domains: Domain[] = [
@@ -69,6 +70,7 @@ const domains: Domain[] = [
     accent: accents.cyan,
     Icon: TrainingIcon,
     Viz: LossCurveViz,
+    gifQuery: "neural network training",
   },
   {
     tag: "Inference",
@@ -79,6 +81,7 @@ const domains: Domain[] = [
     accent: accents.green,
     Icon: InferenceIcon,
     Viz: ThroughputViz,
+    gifQuery: "LLM",
   },
   {
     tag: "Compression",
@@ -89,6 +92,7 @@ const domains: Domain[] = [
     accent: accents.amber,
     Icon: CompressionIcon,
     Viz: CompressionViz,
+    gifQuery: "File COMPRESSION",
   },
   {
     tag: "Algorithms",
@@ -99,6 +103,7 @@ const domains: Domain[] = [
     accent: accents.violet,
     Icon: AlgorithmsIcon,
     Viz: BigOViz,
+    gifQuery: "algebra visualisation",
   },
   {
     tag: "Crypto",
@@ -109,6 +114,7 @@ const domains: Domain[] = [
     accent: accents.rose,
     Icon: CryptoIcon,
     Viz: ZkViz,
+    gifQuery: "coded data numbers encryption",
   },
   {
     tag: "Bio",
@@ -119,10 +125,42 @@ const domains: Domain[] = [
     accent: accents.teal,
     Icon: BioIcon,
     Viz: ProteinViz,
+    gifQuery: "dna code code matrix",
   },
 ];
 
-export function Domains() {
+async function fetchDomainGif(query: string): Promise<string | null> {
+  try {
+    const url = `https://g.tenor.com/v1/search?q=${encodeURIComponent(
+      query,
+    )}&key=LIVDSRZULELA&limit=1&media_filter=minimal&contentfilter=high`;
+    const res = await fetch(url, { next: { revalidate: 60 * 60 * 24 } });
+    if (!res.ok) return null;
+    const json = (await res.json()) as {
+      results?: Array<{
+        media?: Array<{
+          mediumgif?: { url?: string };
+          gif?: { url?: string };
+          tinygif?: { url?: string };
+        }>;
+      }>;
+    };
+    const media = json?.results?.[0]?.media?.[0];
+    return (
+      media?.mediumgif?.url ??
+      media?.gif?.url ??
+      media?.tinygif?.url ??
+      null
+    );
+  } catch {
+    return null;
+  }
+}
+
+export async function Domains() {
+  const gifUrls = await Promise.all(
+    domains.map((domain) => fetchDomainGif(domain.gifQuery)),
+  );
   return (
     <section id="domains" className="border-b border-[var(--color-line)]">
       <div className="container-page py-20 md:py-28">
@@ -139,75 +177,93 @@ export function Domains() {
         />
 
         <div className="mt-14 grid grid-cols-1 gap-px bg-[var(--color-line)] sm:grid-cols-2 lg:grid-cols-3">
-          {domains.map((domain, i) => (
-            <div
-              key={domain.tag}
-              className="domain-card group relative min-h-[270px] overflow-hidden bg-[var(--color-bg)] p-6 transition-colors hover:bg-[var(--color-bg-soft)]"
-              style={
-                {
-                  "--accent": domain.accent.text,
-                  "--accent-border": domain.accent.border,
-                  "--accent-bg": domain.accent.bg,
-                  "--accent-glow": domain.accent.glow,
-                  "--card-delay": `${i * 60}ms`,
-                } as React.CSSProperties
-              }
-            >
-              <span className="domain-card-accent" aria-hidden="true" />
-              <domain.Viz color={domain.accent.text} />
-
-              <div className="relative flex items-center justify-between gap-3">
-                <span
-                  className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[10px] tracking-[0.12em] uppercase"
-                  style={{
-                    borderColor: domain.accent.border,
-                    background: domain.accent.bg,
-                    color: domain.accent.text,
-                  }}
-                >
-                  {domain.tag}
-                </span>
-                <span
-                  className="domain-icon grid size-9 place-items-center rounded-full border"
-                  style={{
-                    borderColor: domain.accent.border,
-                    background: domain.accent.bg,
-                    color: domain.accent.text,
-                  }}
-                >
-                  <domain.Icon className="size-4" />
-                </span>
-              </div>
-
-              <h3 className="relative mt-7 font-sans text-[22px] leading-tight font-medium text-[var(--color-fg)]">
-                {domain.title}
-              </h3>
-              <p className="relative mt-3 max-w-sm font-sans text-sm leading-relaxed text-[var(--color-fg-muted)]">
-                {domain.desc}
-              </p>
-
-              <span
-                className="relative mt-5 inline-flex items-center gap-1.5 font-mono text-[10px] tracking-[0.1em] uppercase"
-                style={{ color: domain.accent.text }}
+          {domains.map((domain, i) => {
+            const gifUrl = gifUrls[i];
+            return (
+              <div
+                key={domain.tag}
+                className="domain-card group relative min-h-[270px] overflow-hidden bg-[var(--color-bg)] p-6 transition-colors hover:bg-[var(--color-bg-soft)]"
+                style={
+                  {
+                    "--accent": domain.accent.text,
+                    "--accent-border": domain.accent.border,
+                    "--accent-bg": domain.accent.bg,
+                    "--accent-glow": domain.accent.glow,
+                    "--card-delay": `${i * 60}ms`,
+                  } as React.CSSProperties
+                }
               >
-                <span
-                  className="inline-block size-1.5 rounded-full"
-                  style={{ background: domain.accent.text }}
-                />
-                {domain.metric}
-              </span>
+                {gifUrl && (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={gifUrl}
+                      alt=""
+                      aria-hidden="true"
+                      loading="lazy"
+                      className="domain-gif pointer-events-none absolute inset-0 h-full w-full object-cover"
+                    />
+                    <span className="domain-gif-veil pointer-events-none absolute inset-0" aria-hidden="true" />
+                  </>
+                )}
+                <span className="domain-card-accent" aria-hidden="true" />
+                <domain.Viz color={domain.accent.text} />
 
-              <div className="relative mt-6 flex items-center justify-between border-t border-dashed border-[var(--color-line-2)] pt-4 font-mono text-[11px] text-[var(--color-fg-muted)]">
-                <span>{domain.count}</span>
-                <span
-                  className="opacity-0 transition-opacity group-hover:opacity-100"
-                  style={{ color: domain.accent.text }}
-                >
-                  <Arrow />
-                </span>
+                <div className="domain-card-content relative z-[2]">
+                  <div className="flex items-center justify-between gap-3">
+                    <span
+                      className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[10px] tracking-[0.12em] uppercase"
+                      style={{
+                        borderColor: domain.accent.border,
+                        background: domain.accent.bg,
+                        color: domain.accent.text,
+                      }}
+                    >
+                      {domain.tag}
+                    </span>
+                    <span
+                      className="domain-icon grid size-9 place-items-center rounded-full border"
+                      style={{
+                        borderColor: domain.accent.border,
+                        background: domain.accent.bg,
+                        color: domain.accent.text,
+                      }}
+                    >
+                      <domain.Icon className="size-4" />
+                    </span>
+                  </div>
+
+                  <h3 className="mt-7 font-sans text-[22px] leading-tight font-medium text-[var(--color-fg)]">
+                    {domain.title}
+                  </h3>
+                  <p className="mt-3 max-w-sm font-sans text-sm leading-relaxed text-[var(--color-fg-muted)]">
+                    {domain.desc}
+                  </p>
+
+                  <span
+                    className="mt-5 inline-flex items-center gap-1.5 font-mono text-[10px] tracking-[0.1em] uppercase"
+                    style={{ color: domain.accent.text }}
+                  >
+                    <span
+                      className="inline-block size-1.5 rounded-full"
+                      style={{ background: domain.accent.text }}
+                    />
+                    {domain.metric}
+                  </span>
+
+                  <div className="mt-6 flex items-center justify-between border-t border-dashed border-[var(--color-line-2)] pt-4 font-mono text-[11px] text-[var(--color-fg-muted)]">
+                    <span>{domain.count}</span>
+                    <span
+                      className="opacity-0 transition-opacity group-hover:opacity-100"
+                      style={{ color: domain.accent.text }}
+                    >
+                      <Arrow />
+                    </span>
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </section>
