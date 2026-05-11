@@ -3,20 +3,43 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
-  aggregateDeltaPercent,
   aggregateImprovement,
   formatDate,
   formatAggregateScore,
   formatSol,
   formatTokenAmount,
+  metricDeltaPercent,
+  metricDirectionLabel,
+  metricImprovement,
+  metricValueFromAggregateScore,
   shortAddress,
   shortHash,
   SYSTEM_PROGRAM,
+  type MetricDirection,
+  type PrimaryMetric,
 } from "@/lib/openResearch/format";
 import { priceAtSupply } from "@/lib/openResearch/trade";
 import { AddressLink } from "../components/AddressLink";
 import { Arrow } from "../components/atoms";
 import { CopyTextButton } from "../components/CopyTextButton";
+
+export type RegistryEvent = {
+  id: string;
+  projectId: string;
+  tokenName: string;
+  tokenSymbol: string;
+  date: string;
+  kind:
+    | "created"
+    | "pending"
+    | "inReview"
+    | "approved"
+    | "rejected"
+    | "expired";
+  message: string;
+  actor: string;
+  score: string;
+};
 
 export type ProjectListItem = {
   id: string;
@@ -35,6 +58,8 @@ export type ProjectListItem = {
   slope: string;
   minerPoolCap: string;
   minerPoolMinted: string;
+  primaryMetricName: string;
+  primaryMetricDirection: MetricDirection;
 };
 
 type SortId = "newest" | "improvement" | "price";
@@ -78,7 +103,20 @@ function improvementValue(project: ProjectListItem) {
   );
 }
 
-export function ProjectsDirectory({ projects }: { projects: ProjectListItem[] }) {
+function primaryMetric(project: ProjectListItem): PrimaryMetric {
+  return {
+    name: project.primaryMetricName,
+    direction: project.primaryMetricDirection,
+  };
+}
+
+export function ProjectsDirectory({
+  projects,
+  events = [],
+}: {
+  projects: ProjectListItem[];
+  events?: RegistryEvent[];
+}) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterId>("all");
   const [sort, setSort] = useState<SortId>("improvement");
@@ -205,7 +243,7 @@ export function ProjectsDirectory({ projects }: { projects: ProjectListItem[] })
 
       <section className="border-b border-[var(--color-line)]">
         <div className="container-page grid grid-cols-1 gap-10 py-16 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
-          <RegistrySnapshot projects={projects} />
+          <RegistrySnapshot projects={projects} events={events} />
           <TopMiners projects={projects} />
         </div>
       </section>
@@ -282,8 +320,11 @@ function ProjectRow({
 }) {
   const baseline = bi(project.baselineAggregateScore);
   const currentBest = bi(project.currentBestAggregateScore);
-  const improvement = aggregateImprovement(currentBest, baseline);
-  const delta = aggregateDeltaPercent(currentBest, baseline);
+  const metric = primaryMetric(project);
+  const baselineMetric = metricValueFromAggregateScore(baseline, baseline, metric);
+  const currentMetric = metricValueFromAggregateScore(currentBest, baseline, metric);
+  const improvement = metricImprovement(currentBest, baseline, metric);
+  const delta = metricDeltaPercent(currentBest, baseline, metric);
   const status = projectStatus(project);
   const minerPoolCap = bi(project.minerPoolCap);
   const minerPoolMinted = bi(project.minerPoolMinted);
@@ -309,6 +350,10 @@ function ProjectRow({
           <span className="text-[var(--color-fg)]">{project.tokenSymbol}</span>
           <span className="text-[var(--color-fg-dim)]">·</span>
           <span>cid {shortHash(project.protocolHash, 6, 4)}</span>
+          <span className="text-[var(--color-fg-dim)]">·</span>
+          <span title={`${project.primaryMetricName} · ${project.primaryMetricDirection}`}>
+            {project.primaryMetricName}
+          </span>
         </div>
       </td>
       <td className="px-4 py-5 font-mono text-xs">
@@ -320,10 +365,13 @@ function ProjectRow({
         </span>
       </td>
       <td className="tick px-4 py-5 text-[15px] text-[var(--color-fg-muted)]">
-        {formatAggregateScore(baseline)}
+        {formatAggregateScore(baselineMetric)}
       </td>
       <td className="tick px-4 py-5 text-[16px] font-semibold text-[var(--color-fg)]">
-        {formatAggregateScore(currentBest)}
+        {formatAggregateScore(currentMetric)}
+        <div className="mt-1 font-mono text-[10px] font-normal text-[var(--color-fg-dim)]">
+          {metricDirectionLabel(metric)}
+        </div>
       </td>
       <td className="tick px-4 py-5">
         {delta === null ? (
@@ -430,74 +478,122 @@ function Sparkline({
   );
 }
 
-function RegistrySnapshot({ projects }: { projects: ProjectListItem[] }) {
-  const rows = useMemo(() => makeSnapshotRows(projects), [projects]);
+function RegistrySnapshot({
+  projects,
+  events,
+}: {
+  projects: ProjectListItem[];
+  events: RegistryEvent[];
+}) {
+  const rows = useMemo(
+    () => (events.length > 0 ? events : fallbackEvents(projects)),
+    [events, projects],
+  );
+  const visible = rows.slice(0, 12);
 
   return (
     <div>
       <p className="label">/ registry</p>
       <h2 className="mt-4 font-sans text-3xl font-medium tracking-tight text-[var(--color-fg)] md:text-[34px]">
-        Current registry <span className="serif">state</span>
+        Registry <span className="serif">activity</span>
       </h2>
       <p className="mt-3 max-w-xl font-sans text-[15px] leading-relaxed text-[var(--color-fg-muted)]">
-        Real project rows from the Solana program, sorted by publish date. This
-        is a state snapshot, not a simulated event stream.
+        Chronological on-chain events — project publications and miner
+        proposals — sorted by submission time.
       </p>
 
       <div className="mt-8 border border-[var(--color-line)] bg-[var(--color-bg-soft)]">
         <div className="flex items-center justify-between border-b border-[var(--color-line)] px-4 py-3">
           <span className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-fg-muted)] uppercase">
-            / registry snapshot
+            / event stream
           </span>
           <span className="or-tag">
             <span className="dot" />
             on-chain data
           </span>
         </div>
-        {rows.map((item) => (
-          <div
-            key={item.id}
-            className="grid gap-2 border-b border-[var(--color-line)] px-4 py-4 transition-colors last:border-b-0 hover:bg-[rgb(255_255_255_/_0.018)] md:grid-cols-[112px_1fr_112px_128px] md:items-center"
-          >
-            <span className="font-mono text-[11px] text-[var(--color-fg-muted)]">
-              {item.date}
-            </span>
-            <span className="font-sans text-[14px] leading-snug text-[var(--color-fg)]">
-              {item.message}
-            </span>
-            <span className="font-mono text-[10px] tracking-[0.12em] text-[var(--color-accent)] uppercase">
-              {item.status}
-            </span>
-            <span className="font-mono text-[11px] text-[var(--color-fg-muted)]">
-              {item.miner}
-            </span>
+        {visible.length === 0 ? (
+          <div className="px-4 py-6 font-sans text-sm text-[var(--color-fg-muted)]">
+            No on-chain activity yet.
           </div>
-        ))}
+        ) : (
+          visible.map((item) => (
+            <Link
+              key={item.id}
+              href={`/projects/${item.projectId}`}
+              className="grid gap-2 border-b border-[var(--color-line)] px-4 py-4 transition-colors last:border-b-0 hover:bg-[rgb(255_255_255_/_0.018)] md:grid-cols-[112px_1fr_112px_128px] md:items-center"
+            >
+              <span className="font-mono text-[11px] text-[var(--color-fg-muted)]">
+                {formatDate(new Date(item.date))}
+              </span>
+              <span className="font-sans text-[14px] leading-snug text-[var(--color-fg)]">
+                {item.message}
+              </span>
+              <span
+                className={`font-mono text-[10px] tracking-[0.12em] uppercase ${eventStatusColor(
+                  item.kind,
+                )}`}
+              >
+                {eventStatusLabel(item.kind)}
+              </span>
+              <span className="font-mono text-[11px] text-[var(--color-fg-muted)]">
+                {item.actor === SYSTEM_PROGRAM
+                  ? "system"
+                  : shortAddress(item.actor)}
+              </span>
+            </Link>
+          ))
+        )}
       </div>
     </div>
   );
 }
 
-function makeSnapshotRows(projects: ProjectListItem[]) {
+function eventStatusLabel(kind: RegistryEvent["kind"]): string {
+  switch (kind) {
+    case "created":
+      return "published";
+    case "inReview":
+      return "in review";
+    default:
+      return kind;
+  }
+}
+
+function eventStatusColor(kind: RegistryEvent["kind"]): string {
+  switch (kind) {
+    case "created":
+      return "text-[var(--color-accent)]";
+    case "approved":
+      return "text-[var(--color-accent)]";
+    case "pending":
+    case "inReview":
+      return "text-[var(--color-cyan)]";
+    case "rejected":
+    case "expired":
+      return "text-[var(--color-rose)]";
+    default:
+      return "text-[var(--color-fg-muted)]";
+  }
+}
+
+function fallbackEvents(projects: ProjectListItem[]): RegistryEvent[] {
   return [...projects]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 10)
-    .map((project) => {
-    const status = projectStatus(project);
-    const miner = project.currentBestMiner === SYSTEM_PROGRAM
-      ? "baseline"
-      : shortAddress(project.currentBestMiner);
-    return {
-      id: project.id,
-      date: formatDate(new Date(project.createdAt)),
-      status,
-      miner,
-      message:
-        status === "submitted"
-          ? `${project.tokenName} published with baseline ${formatAggregateScore(bi(project.baselineAggregateScore))}`
-          : `Miner ${miner} advanced ${project.tokenName} to ${formatAggregateScore(bi(project.currentBestAggregateScore))}`,
-    };
-  });
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    )
+    .map((project) => ({
+      id: `project-${project.id}`,
+      projectId: project.id,
+      tokenName: project.tokenName,
+      tokenSymbol: project.tokenSymbol,
+      date: project.createdAt,
+      kind: "created" as const,
+      message: `${project.tokenName} published with baseline ${formatAggregateScore(bi(project.baselineAggregateScore))}`,
+      actor: project.currentBestMiner,
+      score: project.baselineAggregateScore,
+    }));
 }
 
 function TopMiners({ projects }: { projects: ProjectListItem[] }) {

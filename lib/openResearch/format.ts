@@ -59,6 +59,96 @@ export function aggregateDeltaPercent(
   return (d / b) * 100;
 }
 
+export type MetricDirection = "maximize" | "minimize";
+
+export type PrimaryMetric = {
+  name: string;
+  direction: MetricDirection;
+};
+
+export const DEFAULT_PRIMARY_METRIC: PrimaryMetric = {
+  name: "aggregate score",
+  direction: "maximize",
+};
+
+function readObject(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+export function primaryMetricFromProtocol(protocol: unknown): PrimaryMetric {
+  const root = readObject(protocol);
+  const measurement = readObject(root?.measurement);
+  const primaryMetric =
+    readObject(measurement?.primaryMetric) ??
+    readObject(root?.primaryMetric) ??
+    readObject(root?.primary_metric);
+
+  const rawName = primaryMetric?.name;
+  const rawDirection = primaryMetric?.direction;
+  const direction =
+    rawDirection === "minimize" || rawDirection === "maximize"
+      ? rawDirection
+      : DEFAULT_PRIMARY_METRIC.direction;
+
+  return {
+    name:
+      typeof rawName === "string" && rawName.trim()
+        ? rawName.trim()
+        : DEFAULT_PRIMARY_METRIC.name,
+    direction,
+  };
+}
+
+export function metricValueFromAggregateScore(
+  aggregateScore: bigint,
+  baselineAggregateScore: bigint,
+  metric: PrimaryMetric,
+): bigint {
+  if (metric.direction === "minimize") {
+    return baselineAggregateScore - (aggregateScore - baselineAggregateScore);
+  }
+  return aggregateScore;
+}
+
+export function metricImprovement(
+  aggregateScore: bigint,
+  baselineAggregateScore: bigint,
+  metric: PrimaryMetric,
+): bigint {
+  const metricValue = metricValueFromAggregateScore(
+    aggregateScore,
+    baselineAggregateScore,
+    metric,
+  );
+  return metric.direction === "minimize"
+    ? baselineAggregateScore - metricValue
+    : metricValue - baselineAggregateScore;
+}
+
+export function metricDeltaPercent(
+  aggregateScore: bigint,
+  baselineAggregateScore: bigint,
+  metric: PrimaryMetric,
+): number | null {
+  if (baselineAggregateScore === 0n) return null;
+  const denom =
+    baselineAggregateScore < 0n
+      ? -baselineAggregateScore
+      : baselineAggregateScore;
+  if (denom === 0n) return null;
+  const delta = Number(
+    metricImprovement(aggregateScore, baselineAggregateScore, metric),
+  );
+  const b = Number(denom);
+  if (!Number.isFinite(delta) || !Number.isFinite(b) || b === 0) return null;
+  return (delta / b) * 100;
+}
+
+export function metricDirectionLabel(metric: PrimaryMetric): string {
+  return metric.direction === "minimize" ? "minimized" : "maximized";
+}
+
 /* ---------- SOL / lamports ---------- */
 
 export function formatSol(lamports: bigint, maxFractionDigits = 6): string {

@@ -1,13 +1,32 @@
 import type { Metadata } from "next";
 import { OPEN_RESEARCH_PROGRAM_ID, SOLANA_CLUSTER } from "@/lib/openResearch/client";
-import { explorerAddressUrl, SYSTEM_PROGRAM } from "@/lib/openResearch/format";
+import {
+  DEFAULT_PRIMARY_METRIC,
+  explorerAddressUrl,
+  formatAggregateScore,
+  metricValueFromAggregateScore,
+  primaryMetricFromProtocol,
+  SYSTEM_PROGRAM,
+  type PrimaryMetric,
+} from "@/lib/openResearch/format";
+import { fetchArtifactByReference } from "@/lib/openResearch/artifact";
 import { HIDDEN_PROJECT_IDS } from "@/lib/openResearch/projectUi";
-import { fetchProjectMint, listProjects, type ProjectView } from "@/lib/openResearch/read";
+import {
+  fetchProjectMint,
+  listProjects,
+  listProposals,
+  type ProjectView,
+  type ProposalView,
+} from "@/lib/openResearch/read";
 import { AddressLink } from "../components/AddressLink";
 import { Arrow } from "../components/atoms";
 import { Footer } from "../components/Footer";
 import { Nav } from "../components/Nav";
-import { ProjectsDirectory, type ProjectListItem } from "./ProjectsDirectory";
+import {
+  ProjectsDirectory,
+  type ProjectListItem,
+  type RegistryEvent,
+} from "./ProjectsDirectory";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 30;
@@ -20,11 +39,23 @@ export const metadata: Metadata = {
 
 export default async function ProjectsPage() {
   let projects: ProjectListItem[] = [];
+  let events: RegistryEvent[] = [];
   let error: string | null = null;
 
   try {
-    const rows = (await listProjects()).filter((p) => !HIDDEN_PROJECT_IDS.has(p.id));
+    const [allProjects, allProposals] = await Promise.all([
+      listProjects(),
+      listProposals().catch(() => [] as ProposalView[]),
+    ]);
+    const rows = allProjects.filter((p) => !HIDDEN_PROJECT_IDS.has(p.id));
     projects = await Promise.all(rows.map(toProjectListItem));
+    const metricsByProjectId = new Map<string, PrimaryMetric>(
+      projects.map((p) => [
+        p.id,
+        { name: p.primaryMetricName, direction: p.primaryMetricDirection },
+      ]),
+    );
+    events = buildRegistryEvents(rows, allProposals, metricsByProjectId);
   } catch (e) {
     error = e instanceof Error ? e.message : "Failed to read OpenResearch program";
   }
@@ -38,13 +69,103 @@ export default async function ProjectsPage() {
         ) : projects.length === 0 ? (
           <EmptyState />
         ) : (
-          <ProjectsDirectory projects={projects} />
+          <ProjectsDirectory projects={projects} events={events} />
         )}
         <NetworkSummary projects={projects} error={error} />
       </main>
       <Footer />
     </>
   );
+}
+
+function buildRegistryEvents(
+  projects: ProjectView[],
+  proposals: ProposalView[],
+  metricsByProjectId: Map<string, PrimaryMetric>,
+): RegistryEvent[] {
+  const projectById = new Map<string, ProjectView>();
+  for (const project of projects) {
+    projectById.set(project.id.toString(), project);
+  }
+
+  const metricFor = (projectId: string): PrimaryMetric =>
+    metricsByProjectId.get(projectId) ?? DEFAULT_PRIMARY_METRIC;
+
+  const out: RegistryEvent[] = [];
+
+  for (const project of projects) {
+    const metric = metricFor(project.id.toString());
+    const baselineMetric = metricValueFromAggregateScore(
+      project.baselineAggregateScore,
+      project.baselineAggregateScore,
+      metric,
+    );
+    out.push({
+      id: `project-${project.id}`,
+      projectId: project.id.toString(),
+      tokenName: project.tokenName,
+      tokenSymbol: project.tokenSymbol,
+      date: project.createdAt.toISOString(),
+      kind: "created",
+      message: `${project.tokenName} published with baseline ${formatAggregateScore(baselineMetric)}`,
+      actor: project.creator.toBase58(),
+      score: baselineMetric.toString(),
+    });
+  }
+
+  for (const proposal of proposals) {
+    const project = projectById.get(proposal.projectId.toString());
+    if (!project) continue;
+    const miner = proposal.miner.toBase58();
+    const aggregate =
+      proposal.verifiedAggregateScore !== 0n
+        ? proposal.verifiedAggregateScore
+        : proposal.claimedAggregateScore;
+    const metric = metricFor(project.id.toString());
+    const score = metricValueFromAggregateScore(
+      aggregate,
+      project.baselineAggregateScore,
+      metric,
+    );
+    const tokenName = project.tokenName;
+
+    const scoreText = formatAggregateScore(score);
+    let message: string;
+    switch (proposal.status) {
+      case "approved":
+        message = `Miner advanced ${tokenName} to ${scoreText}`;
+        break;
+      case "rejected":
+        message = `Proposal #${proposal.id} on ${tokenName} rejected`;
+        break;
+      case "expired":
+        message = `Proposal #${proposal.id} on ${tokenName} expired`;
+        break;
+      case "inReview":
+        message = `Proposal #${proposal.id} on ${tokenName} entered review at ${scoreText}`;
+        break;
+      case "pending":
+      default:
+        message = `Miner submitted proposal #${proposal.id} on ${tokenName} at ${scoreText}`;
+        break;
+    }
+
+    out.push({
+      id: `proposal-${proposal.id}`,
+      projectId: proposal.projectId.toString(),
+      tokenName,
+      tokenSymbol: project.tokenSymbol,
+      date: proposal.submittedAt.toISOString(),
+      kind: proposal.status,
+      message,
+      actor: miner,
+      score: score.toString(),
+    });
+  }
+
+  return out
+    .filter((event) => !HIDDEN_PROJECT_IDS.has(BigInt(event.projectId)))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }
 
 function NetworkSummary({
@@ -206,7 +327,18 @@ function ErrorState({ message }: { message: string }) {
 }
 
 async function toProjectListItem(project: ProjectView): Promise<ProjectListItem> {
-  const mint = await fetchProjectMint(null, project.id);
+  const [mint, artifact] = await Promise.all([
+    fetchProjectMint(null, project.id),
+    fetchArtifactByReference({
+      hash: project.protocolHash,
+      irysId: project.protocolIrysId,
+    }).catch(() => null),
+  ]);
+  const primaryMetric =
+    artifact?.kind === "json"
+      ? primaryMetricFromProtocol(artifact.data)
+      : DEFAULT_PRIMARY_METRIC;
+
   return {
     id: project.id.toString(),
     createdAt: project.createdAt.toISOString(),
@@ -224,5 +356,7 @@ async function toProjectListItem(project: ProjectView): Promise<ProjectListItem>
     slope: project.slope.toString(),
     minerPoolCap: project.minerPoolCap.toString(),
     minerPoolMinted: project.minerPoolMinted.toString(),
+    primaryMetricName: primaryMetric.name,
+    primaryMetricDirection: primaryMetric.direction,
   };
 }
