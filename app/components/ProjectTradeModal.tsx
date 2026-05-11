@@ -1,144 +1,121 @@
 "use client";
 
+import { useWallet } from "@solana/wallet-adapter-react";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { LAMPORTS_PER_SOL, PublicKey, type Transaction, type VersionedTransaction } from "@solana/web3.js";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { formatEther, formatUnits, parseEther, parseUnits } from "viem";
+import { getConnection, type AnchorWalletLike } from "@/lib/openResearch/client";
 import {
-  useBalance,
-  useConnect,
-  useConnection,
-  useReadContract,
-  useWaitForTransactionReceipt,
-  useWriteContract,
-} from "wagmi";
-import { projectTokenAbi } from "@/lib/arah/abis";
-import { galileo } from "@/lib/arah/chain";
-import { formatTokenAmount, shortAddress } from "@/lib/arah/format";
-import { switchToGalileoWallet } from "@/lib/arah/switchToGalileoWallet";
-import { watchErc20InWallet } from "@/lib/arah/watchErc20InWallet";
+  explorerTxUrl,
+  formatSol,
+  formatTokenAmount,
+  lamportsFromSolString,
+  shortAddress,
+} from "@/lib/openResearch/format";
+import { fetchUserProjectTokenBalance } from "@/lib/openResearch/read";
+import {
+  buyProjectTokens,
+  quoteBuyForLamports,
+  quoteSellTokens,
+  sellProjectTokens,
+} from "@/lib/openResearch/trade";
 
 type ProjectTradeModalProps = {
   open: boolean;
   onClose: () => void;
-  tokenAddress: `0x${string}`;
+  projectId: string;
+  mint: string;
   tokenSymbol: string;
   decimals: number;
+  basePrice: string;
+  slope: string;
+  totalSupply: string;
 };
 
-/** Optional logo for “Add token” in MetaMask (absolute HTTPS). */
-const TOKEN_ICON_URL = "https://openresearch.xyz/logos/icon.png";
-
 type TradeMode = "buy" | "sell";
+
+function parseWholeTokens(value: string): bigint {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) return 0n;
+  return BigInt(trimmed);
+}
+
+function buildAnchorWallet(wallet: ReturnType<typeof useWallet>): AnchorWalletLike | null {
+  if (!wallet.publicKey || !wallet.signTransaction || !wallet.signAllTransactions) {
+    return null;
+  }
+  return {
+    publicKey: wallet.publicKey,
+    signTransaction: wallet.signTransaction as <T extends Transaction | VersionedTransaction>(tx: T) => Promise<T>,
+    signAllTransactions: wallet.signAllTransactions as <T extends Transaction | VersionedTransaction>(txs: T[]) => Promise<T[]>,
+  };
+}
 
 export function ProjectTradeModal({
   open,
   onClose,
-  tokenAddress,
+  projectId,
+  mint,
   tokenSymbol,
   decimals,
+  basePrice,
+  slope,
+  totalSupply,
 }: ProjectTradeModalProps) {
+  const wallet = useWallet();
   const [mounted, setMounted] = useState(false);
-  const { address, chainId, status } = useConnection();
-  const { connectors, connect, isPending: isConnecting } = useConnect();
-  const [switching, setSwitching] = useState(false);
-  const [switchErr, setSwitchErr] = useState<string | null>(null);
   const [tradeMode, setTradeMode] = useState<TradeMode>("buy");
-  const [buyEth, setBuyEth] = useState("0.01");
+  const [buySol, setBuySol] = useState("0.01");
   const [sellTokens, setSellTokens] = useState("");
-  const [addTokenBusy, setAddTokenBusy] = useState(false);
-  const [addTokenErr, setAddTokenErr] = useState<string | null>(null);
+  const [solBalance, setSolBalance] = useState<bigint | null>(null);
+  const [tokenBalance, setTokenBalance] = useState<bigint | null>(null);
+  const [txSig, setTxSig] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const { data: nativeBal } = useBalance({
-    address,
-    chainId: galileo.id,
-    query: { enabled: Boolean(address) && chainId === galileo.id },
-  });
+  const anchorWallet = useMemo(() => buildAnchorWallet(wallet), [wallet]);
+  const connection = useMemo(() => getConnection(), []);
 
-  const injectedConnector = useMemo(
-    () => connectors.find((c) => c.id === "injected"),
-    [connectors],
+  const lamportsIn = useMemo(() => lamportsFromSolString(buySol), [buySol]);
+  const sellAmount = useMemo(() => parseWholeTokens(sellTokens), [sellTokens]);
+  const projectKey = useMemo(() => BigInt(projectId), [projectId]);
+  const supply = useMemo(() => BigInt(totalSupply), [totalSupply]);
+  const curveBase = useMemo(() => BigInt(basePrice), [basePrice]);
+  const curveSlope = useMemo(() => BigInt(slope), [slope]);
+
+  const buyQuote = useMemo(
+    () => quoteBuyForLamports(curveBase, curveSlope, supply, lamportsIn),
+    [curveBase, curveSlope, supply, lamportsIn],
+  );
+  const sellQuote = useMemo(
+    () => quoteSellTokens(curveBase, curveSlope, supply, sellAmount),
+    [curveBase, curveSlope, supply, sellAmount],
   );
 
-  const {
-    data: balance,
-    refetch: refetchBalance,
-    isLoading: balanceLoading,
-  } = useReadContract({
-    address: tokenAddress,
-    abi: projectTokenAbi,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: { enabled: open && Boolean(address) },
-  });
-
-  const buyWei = useMemo(() => {
-    try {
-      return parseEther(buyEth || "0");
-    } catch {
-      return 0n;
+  const refreshBalances = useCallback(async () => {
+    if (!wallet.publicKey) {
+      setSolBalance(null);
+      setTokenBalance(null);
+      return;
     }
-  }, [buyEth]);
 
-  const sellAmount = useMemo(() => {
-    try {
-      return parseUnits(sellTokens || "0", decimals);
-    } catch {
-      return 0n;
-    }
-  }, [sellTokens, decimals]);
-
-  const { data: quoteBuyOut } = useReadContract({
-    address: tokenAddress,
-    abi: projectTokenAbi,
-    functionName: "quoteBuy",
-    args: [buyWei],
-    query: { enabled: open && buyWei > 0n },
-  });
-
-  const { data: quoteSellOut } = useReadContract({
-    address: tokenAddress,
-    abi: projectTokenAbi,
-    functionName: "quoteSell",
-    args: [sellAmount],
-    query: { enabled: open && sellAmount > 0n },
-  });
-
-  const {
-    mutateAsync: writeContractAsync,
-    isPending: isWritePending,
-    error: writeError,
-    reset: resetWrite,
-  } = useWriteContract();
-
-  const [txHash, setTxHash] = useState<`0x${string}` | undefined>();
-  const { isLoading: isConfirming, isSuccess: txSuccess, isError: txError } =
-    useWaitForTransactionReceipt({
-      hash: txHash,
-      query: { enabled: Boolean(txHash) },
-    });
-
-  const invalidateReads = useCallback(async () => {
-    await refetchBalance();
-  }, [refetchBalance]);
+    const [lamports, token] = await Promise.all([
+      connection.getBalance(wallet.publicKey, "confirmed"),
+      fetchUserProjectTokenBalance(null, projectKey, wallet.publicKey, decimals),
+    ]);
+    setSolBalance(BigInt(lamports));
+    setTokenBalance(token.amount);
+  }, [connection, decimals, projectKey, wallet.publicKey]);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   useEffect(() => {
-    if (!txHash || isConfirming) return;
-    if (txSuccess) void invalidateReads();
-    if (txSuccess || txError) setTxHash(undefined);
-  }, [txHash, isConfirming, txSuccess, txError, invalidateReads]);
-
-  useEffect(() => {
-    if (!open) {
-      resetWrite();
-      setTxHash(undefined);
-      setSwitchErr(null);
-      setAddTokenErr(null);
-    }
-  }, [open, resetWrite]);
+    if (!open) return;
+    void refreshBalances().catch(() => undefined);
+  }, [open, refreshBalances]);
 
   useEffect(() => {
     if (!open) return;
@@ -149,75 +126,49 @@ export function ProjectTradeModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  const onConnect = () => {
-    if (!injectedConnector) return;
-    connect({ connector: injectedConnector });
-  };
-
-  const onSwitchChain = () => {
-    setSwitchErr(null);
-    setSwitching(true);
-    void (async () => {
-      try {
-        await switchToGalileoWallet();
-      } catch (e) {
-        setSwitchErr(e instanceof Error ? e.message : String(e));
-      } finally {
-        setSwitching(false);
-      }
-    })();
-  };
-
-  const onAddToken = () => {
-    setAddTokenErr(null);
-    setAddTokenBusy(true);
-    void (async () => {
-      try {
-        await watchErc20InWallet({
-          address: tokenAddress,
-          symbol: tokenSymbol,
-          decimals,
-          image: TOKEN_ICON_URL,
-        });
-      } catch (e) {
-        setAddTokenErr(e instanceof Error ? e.message : String(e));
-      } finally {
-        setAddTokenBusy(false);
-      }
-    })();
-  };
-
-  const busy = isWritePending || isConfirming;
+  useEffect(() => {
+    if (!open) {
+      setError(null);
+      setTxSig(null);
+      setBusy(false);
+    }
+  }, [open]);
 
   const onBuy = async () => {
-    if (!address || chainId !== galileo.id || buyWei <= 0n) return;
-    const hash = await writeContractAsync({
-      address: tokenAddress,
-      abi: projectTokenAbi,
-      functionName: "buy",
-      value: buyWei,
-      chainId: galileo.id,
-    });
-    setTxHash(hash);
+    if (!anchorWallet || lamportsIn <= 0n) return;
+    setBusy(true);
+    setError(null);
+    setTxSig(null);
+    try {
+      const sig = await buyProjectTokens(anchorWallet, projectKey, lamportsIn);
+      setTxSig(sig);
+      await refreshBalances();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const onSell = async () => {
-    if (!address || chainId !== galileo.id || sellAmount <= 0n) return;
-    const hash = await writeContractAsync({
-      address: tokenAddress,
-      abi: projectTokenAbi,
-      functionName: "sell",
-      args: [sellAmount],
-      chainId: galileo.id,
-    });
-    setTxHash(hash);
+    if (!anchorWallet || sellAmount <= 0n) return;
+    setBusy(true);
+    setError(null);
+    setTxSig(null);
+    try {
+      const sig = await sellProjectTokens(anchorWallet, projectKey, sellAmount);
+      setTxSig(sig);
+      await refreshBalances();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   };
-
-  const wrongChain = Boolean(address && chainId !== galileo.id);
-  const nativeSymbol = nativeBal?.symbol ?? galileo.nativeCurrency.symbol;
 
   if (!open || !mounted) return null;
 
+  const walletReady = Boolean(anchorWallet);
   const modal = (
     <div
       className="fixed inset-0 z-[10000] flex items-center justify-center p-4 sm:p-6"
@@ -244,8 +195,8 @@ export function ProjectTradeModal({
                 Trade {tokenSymbol}
               </h2>
               <p className="mt-1.5 max-w-md font-mono text-xs leading-snug text-[var(--color-fg-muted)]">
-                Bonding curve on 0G Galileo — pay native {nativeSymbol} to buy;
-                sell returns {nativeSymbol}.
+                Bonding curve on Solana devnet. Project tokens are SPL tokens
+                with {decimals} decimals.
               </p>
             </div>
             <button
@@ -254,7 +205,7 @@ export function ProjectTradeModal({
               className="shrink-0 rounded-md border border-[var(--color-line)] bg-[var(--color-bg-soft)] px-2.5 py-1 font-mono text-sm text-[var(--color-fg-muted)] transition-colors hover:border-[var(--color-brand)] hover:text-[var(--color-brand-bright)]"
               aria-label="Close"
             >
-              ✕
+              x
             </button>
           </div>
         </header>
@@ -262,124 +213,57 @@ export function ProjectTradeModal({
         <div className="space-y-6 px-5 py-6">
           <section className="rounded-lg border border-[var(--color-line)] bg-[var(--color-bg-soft)] p-4">
             <h3 className="label mb-3 text-[var(--color-fg-muted)]">Wallet</h3>
-            {status === "connecting" || status === "reconnecting" ? (
-              <p className="font-mono text-xs text-[var(--color-fg-muted)]">
-                Connecting…
-              </p>
-            ) : address ? (
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-baseline justify-between gap-3">
-                  <div className="min-w-0 font-mono text-xs">
-                    <span className="text-[var(--color-fg-dim)]">Connected · </span>
-                    <span className="break-all text-[var(--color-brand-bright)]">
-                      {shortAddress(address)}
-                    </span>
-                  </div>
-                  {nativeBal ? (
-                    <span className="shrink-0 font-mono text-xs text-[var(--color-fg-dim)]">
-                      {nativeSymbol}:{" "}
-                      {formatUnits(nativeBal.value, nativeBal.decimals)}
-                    </span>
-                  ) : null}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {wallet.publicKey ? (
+                <div className="min-w-0 font-mono text-xs">
+                  <span className="text-[var(--color-fg-dim)]">Connected · </span>
+                  <span className="break-all text-[var(--color-brand-bright)]">
+                    {shortAddress(wallet.publicKey.toBase58())}
+                  </span>
                 </div>
-                {wrongChain ? (
-                  <div className="mt-3 rounded-md border border-[var(--color-line)] bg-[var(--color-bg)] p-3">
-                    <p className="font-mono text-xs text-[var(--color-fg-muted)]">
-                      Switch to{" "}
-                      <strong className="text-[var(--color-fg)]">{galileo.name}</strong>{" "}
-                      to trade.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={onSwitchChain}
-                      disabled={switching}
-                      className="mt-3 w-full rounded-md border border-[var(--color-brand)] bg-[var(--color-brand-subtle)] py-2.5 font-mono text-xs font-medium text-[var(--color-brand-bright)] hover:bg-[var(--color-brand-line)] disabled:opacity-50"
-                    >
-                      {switching ? "Switching…" : "Switch network"}
-                    </button>
-                    {switchErr ? (
-                      <p className="mt-2 whitespace-pre-wrap font-mono text-[11px] leading-snug text-[var(--color-fg-muted)]">
-                        {switchErr}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : (
-                  <p className="mt-2 font-mono text-[11px] text-[var(--color-fg-dim)]">
-                    Network: {galileo.name}
-                  </p>
-                )}
-                <div className="mt-4 flex flex-col gap-2 border-t border-[var(--color-line)] pt-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="label mb-1 text-[var(--color-fg-dim)]">
-                      {tokenSymbol} balance
-                    </p>
-                    <p className="font-mono text-sm tabular-nums text-[var(--color-fg)]">
-                      {balanceLoading
-                        ? "…"
-                        : `${formatTokenAmount(balance ?? 0n, decimals, {
-                            compact: false,
-                            maxFractionDigits: 8,
-                          })} ${tokenSymbol}`}
-                    </p>
-                  </div>
-                  {address && !wrongChain ? (
-                    <button
-                      type="button"
-                      onClick={onAddToken}
-                      disabled={addTokenBusy}
-                      className="shrink-0 rounded-md border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 font-mono text-[11px] text-[var(--color-fg-muted)] transition-colors hover:border-[var(--color-brand)] hover:text-[var(--color-brand-bright)] disabled:opacity-50"
-                    >
-                      {addTokenBusy ? "Adding…" : `Add ${tokenSymbol} to wallet`}
-                    </button>
-                  ) : null}
-                </div>
-                {addTokenErr ? (
-                  <p className="font-mono text-[11px] text-[var(--color-fg-muted)]">
-                    {addTokenErr}
-                  </p>
-                ) : null}
+              ) : (
+                <p className="font-mono text-xs text-[var(--color-fg-muted)]">
+                  Connect a Solana wallet to trade.
+                </p>
+              )}
+              <WalletMultiButton />
+            </div>
+
+            {wallet.publicKey ? (
+              <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[var(--color-line)] pt-4">
+                <BalanceStat
+                  label="SOL"
+                  value={solBalance === null ? "..." : `${formatSol(solBalance)} SOL`}
+                />
+                <BalanceStat
+                  label={`${tokenSymbol} balance`}
+                  value={
+                    tokenBalance === null
+                      ? "..."
+                      : `${formatTokenAmount(tokenBalance, decimals, {
+                          compact: false,
+                        })} ${tokenSymbol}`
+                  }
+                />
               </div>
-            ) : (
-              <button
-                type="button"
-                onClick={onConnect}
-                disabled={!injectedConnector || isConnecting}
-                className="w-full rounded-md border border-[var(--color-brand)] bg-[var(--color-brand-subtle)] py-3 font-mono text-xs font-medium uppercase tracking-wider text-[var(--color-brand-bright)] transition-colors hover:bg-[var(--color-brand-line)] disabled:opacity-50"
-              >
-                {!injectedConnector
-                  ? "No injected wallet"
-                  : isConnecting
-                    ? "Connecting…"
-                    : "Connect wallet"}
-              </button>
-            )}
+            ) : null}
+
+            {wallet.publicKey && !walletReady ? (
+              <p className="mt-3 font-mono text-[11px] leading-snug text-[var(--color-fg-muted)]">
+                This wallet adapter does not expose the transaction signing
+                methods required by Anchor.
+              </p>
+            ) : null}
           </section>
 
-          {/* Swap-style buy / sell */}
           <section className="overflow-hidden rounded-xl border border-[var(--color-line)] bg-[var(--color-bg-soft)]">
             <div className="flex p-1">
-              <button
-                type="button"
-                onClick={() => setTradeMode("buy")}
-                className={
-                  tradeMode === "buy"
-                    ? "flex-1 rounded-lg bg-[var(--color-bg)] py-2.5 font-mono text-xs font-semibold text-[var(--color-fg)] shadow-sm"
-                    : "flex-1 rounded-lg py-2.5 font-mono text-xs text-[var(--color-fg-muted)] transition-colors hover:text-[var(--color-fg)]"
-                }
-              >
-                Buy with {nativeSymbol}
-              </button>
-              <button
-                type="button"
-                onClick={() => setTradeMode("sell")}
-                className={
-                  tradeMode === "sell"
-                    ? "flex-1 rounded-lg bg-[var(--color-bg)] py-2.5 font-mono text-xs font-semibold text-[var(--color-fg)] shadow-sm"
-                    : "flex-1 rounded-lg py-2.5 font-mono text-xs text-[var(--color-fg-muted)] transition-colors hover:text-[var(--color-fg)]"
-                }
-              >
-                Sell for {nativeSymbol}
-              </button>
+              <ModeButton active={tradeMode === "buy"} onClick={() => setTradeMode("buy")}>
+                Buy with SOL
+              </ModeButton>
+              <ModeButton active={tradeMode === "sell"} onClick={() => setTradeMode("sell")}>
+                Sell for SOL
+              </ModeButton>
             </div>
 
             <div className="space-y-3 border-t border-[var(--color-line)] p-4">
@@ -388,46 +272,45 @@ export function ProjectTradeModal({
                   <div>
                     <div className="flex items-center justify-between font-mono text-[11px] text-[var(--color-fg-dim)]">
                       <span>You pay</span>
-                      {nativeBal ? (
-                        <span>
-                          Balance:{" "}
-                          {formatUnits(nativeBal.value, nativeBal.decimals)}{" "}
-                          {nativeSymbol}
-                        </span>
-                      ) : null}
+                      {solBalance !== null ? <span>{formatSol(solBalance)} SOL</span> : null}
                     </div>
                     <div className="mt-2 flex items-center gap-3 rounded-lg border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-3">
                       <input
-                        value={buyEth}
-                        onChange={(e) => setBuyEth(e.target.value)}
-                        disabled={!address || wrongChain || busy}
+                        value={buySol}
+                        onChange={(e) => setBuySol(e.target.value)}
+                        disabled={!walletReady || busy}
                         className="min-w-0 flex-1 bg-transparent font-mono text-lg tabular-nums text-[var(--color-fg)] outline-none disabled:opacity-50"
                         inputMode="decimal"
                         placeholder="0"
-                        aria-label={`Amount in ${nativeSymbol}`}
+                        aria-label="Amount in SOL"
                       />
                       <span className="shrink-0 rounded bg-[var(--color-bg-soft)] px-2 py-1 font-mono text-xs font-medium text-[var(--color-fg-muted)]">
-                        {nativeSymbol}
+                        SOL
                       </span>
                     </div>
                   </div>
-                  <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-3">
-                    <p className="font-mono text-[11px] text-[var(--color-fg-dim)]">
-                      You receive
-                    </p>
-                    <p className="mt-1 font-mono text-sm tabular-nums text-[var(--color-fg)]">
-                      {quoteBuyOut !== undefined && buyWei > 0n
-                        ? `≈ ${formatTokenAmount(quoteBuyOut, decimals, { compact: false })} ${tokenSymbol}`
-                        : "—"}
-                    </p>
-                  </div>
+                  <QuoteBox
+                    label="You receive"
+                    value={
+                      lamportsIn > 0n
+                        ? `~ ${formatTokenAmount(buyQuote.tokens, decimals, {
+                            compact: false,
+                          })} ${tokenSymbol}`
+                        : "-"
+                    }
+                    sub={
+                      buyQuote.lamportsSpent > 0n
+                        ? `${formatSol(buyQuote.lamportsSpent)} SOL spent by curve`
+                        : undefined
+                    }
+                  />
                   <button
                     type="button"
                     onClick={() => void onBuy()}
-                    disabled={!address || wrongChain || busy || buyWei <= 0n}
+                    disabled={!walletReady || busy || lamportsIn <= 0n}
                     className="w-full rounded-lg border border-[var(--color-green)] bg-[rgb(69_181_165_/_0.14)] py-3 font-mono text-sm font-semibold text-[var(--color-green)] transition-colors hover:bg-[rgb(69_181_165_/_0.22)] disabled:opacity-40"
                   >
-                    {busy ? "Confirm in wallet…" : `Buy ${tokenSymbol}`}
+                    {busy ? "Confirming..." : `Buy ${tokenSymbol}`}
                   </button>
                 </>
               ) : (
@@ -435,26 +318,23 @@ export function ProjectTradeModal({
                   <div>
                     <div className="flex items-center justify-between font-mono text-[11px] text-[var(--color-fg-dim)]">
                       <span>You pay</span>
-                      {address && !wrongChain && balance != null ? (
+                      {tokenBalance !== null ? (
                         <button
                           type="button"
-                          onClick={() =>
-                            setSellTokens(formatUnits(balance, decimals))
-                          }
+                          onClick={() => setSellTokens(tokenBalance.toString())}
                           className="text-[var(--color-brand)] hover:underline"
                         >
-                          Max:{" "}
-                          {formatTokenAmount(balance, decimals)} {tokenSymbol}
+                          Max: {formatTokenAmount(tokenBalance, decimals)} {tokenSymbol}
                         </button>
                       ) : null}
                     </div>
                     <div className="mt-2 flex items-center gap-3 rounded-lg border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-3">
                       <input
                         value={sellTokens}
-                        onChange={(e) => setSellTokens(e.target.value)}
-                        disabled={!address || wrongChain || busy}
+                        onChange={(e) => setSellTokens(e.target.value.replace(/[^\d]/g, ""))}
+                        disabled={!walletReady || busy}
                         className="min-w-0 flex-1 bg-transparent font-mono text-lg tabular-nums text-[var(--color-fg)] outline-none disabled:opacity-50"
-                        inputMode="decimal"
+                        inputMode="numeric"
                         placeholder="0"
                         aria-label={`Amount in ${tokenSymbol}`}
                       />
@@ -463,34 +343,47 @@ export function ProjectTradeModal({
                       </span>
                     </div>
                   </div>
-                  <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-3">
-                    <p className="font-mono text-[11px] text-[var(--color-fg-dim)]">
-                      You receive
-                    </p>
-                    <p className="mt-1 font-mono text-sm tabular-nums text-[var(--color-fg)]">
-                      {quoteSellOut !== undefined && sellAmount > 0n
-                        ? `≈ ${formatEther(quoteSellOut)} ${nativeSymbol}`
-                        : "—"}
-                    </p>
-                  </div>
+                  <QuoteBox
+                    label="You receive"
+                    value={sellAmount > 0n ? `~ ${formatSol(sellQuote)} SOL` : "-"}
+                  />
                   <button
                     type="button"
                     onClick={() => void onSell()}
-                    disabled={
-                      !address || wrongChain || busy || sellAmount <= 0n
-                    }
+                    disabled={!walletReady || busy || sellAmount <= 0n}
                     className="w-full rounded-lg border border-[var(--color-line)] bg-[var(--color-bg)] py-3 font-mono text-sm font-semibold text-[var(--color-fg-muted)] transition-colors hover:border-[var(--color-brand)] hover:text-[var(--color-brand-bright)] disabled:opacity-40"
                   >
-                    {busy ? "Confirm in wallet…" : `Sell ${tokenSymbol}`}
+                    {busy ? "Confirming..." : `Sell ${tokenSymbol}`}
                   </button>
                 </>
               )}
             </div>
           </section>
 
-          {writeError ? (
+          <div className="rounded-md border border-[var(--color-line)] bg-[var(--color-bg-soft)] p-3 font-mono text-[11px] leading-snug text-[var(--color-fg-muted)]">
+            <p>
+              Mint: <span className="text-[var(--color-fg)]">{shortAddress(mint)}</span>
+            </p>
+            <p className="mt-1">
+              Curve supply: {formatTokenAmount(supply, decimals, { compact: false })}{" "}
+              {tokenSymbol}. 1 SOL = {LAMPORTS_PER_SOL.toLocaleString()} lamports.
+            </p>
+          </div>
+
+          {txSig ? (
+            <a
+              href={explorerTxUrl(txSig)}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="block rounded-md border border-[var(--color-line)] bg-[var(--color-bg-soft)] p-3 font-mono text-xs text-[var(--color-brand-bright)] underline-offset-4 hover:underline"
+            >
+              Transaction {shortAddress(txSig)} on explorer
+            </a>
+          ) : null}
+
+          {error ? (
             <p className="rounded-md border border-[var(--color-line)] bg-[var(--color-bg-soft)] p-3 font-mono text-xs leading-snug text-[var(--color-fg-muted)]">
-              {writeError.message}
+              {error}
             </p>
           ) : null}
         </div>
@@ -499,4 +392,65 @@ export function ProjectTradeModal({
   );
 
   return createPortal(modal, document.body);
+}
+
+function BalanceStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="label mb-1 text-[var(--color-fg-dim)]">{label}</p>
+      <p className="font-mono text-sm tabular-nums text-[var(--color-fg)]">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function ModeButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        active
+          ? "flex-1 rounded-lg bg-[var(--color-bg)] py-2.5 font-mono text-xs font-semibold text-[var(--color-fg)] shadow-sm"
+          : "flex-1 rounded-lg py-2.5 font-mono text-xs text-[var(--color-fg-muted)] transition-colors hover:text-[var(--color-fg)]"
+      }
+    >
+      {children}
+    </button>
+  );
+}
+
+function QuoteBox({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+}) {
+  return (
+    <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-3">
+      <p className="font-mono text-[11px] text-[var(--color-fg-dim)]">
+        {label}
+      </p>
+      <p className="mt-1 font-mono text-sm tabular-nums text-[var(--color-fg)]">
+        {value}
+      </p>
+      {sub ? (
+        <p className="mt-1 font-mono text-[11px] text-[var(--color-fg-dim)]">
+          {sub}
+        </p>
+      ) : null}
+    </div>
+  );
 }

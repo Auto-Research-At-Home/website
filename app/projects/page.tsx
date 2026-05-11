@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import { PROJECT_REGISTRY_ADDRESS } from "@/lib/arah/chain";
-import { explorerAddressUrl } from "@/lib/arah/format";
-import { HIDDEN_PROJECT_IDS } from "@/lib/arah/projectUi";
-import { fetchListedProjects, type ListedProject } from "@/lib/arah/registry";
+import { OPEN_RESEARCH_PROGRAM_ID } from "@/lib/openResearch/client";
+import { explorerAddressUrl } from "@/lib/openResearch/format";
+import { HIDDEN_PROJECT_IDS } from "@/lib/openResearch/projectUi";
+import { fetchProjectMint, listProjects, type ProjectView } from "@/lib/openResearch/read";
 import { AddressLink } from "../components/AddressLink";
 import { Footer } from "../components/Footer";
 import { Nav } from "../components/Nav";
-import { ProjectsDirectory } from "./ProjectsDirectory";
+import { ProjectsDirectory, type ProjectListItem } from "./ProjectsDirectory";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 30;
@@ -15,18 +15,18 @@ export const revalidate = 30;
 export const metadata: Metadata = {
   title: "Projects",
   description:
-    "All OpenResearch projects published on the 0G Galileo on-chain registry, with current best scores, baselines, and project token prices.",
+    "All OpenResearch projects published on the Solana devnet program, with current best scores, baselines, and project token prices.",
 };
 
 export default async function ProjectsPage() {
-  let projects: ListedProject[] = [];
+  let projects: ProjectListItem[] = [];
   let error: string | null = null;
 
   try {
-    projects = await fetchListedProjects();
-    projects = projects.filter((p) => !HIDDEN_PROJECT_IDS.has(p.id));
+    const rows = (await listProjects()).filter((p) => !HIDDEN_PROJECT_IDS.has(p.id));
+    projects = await Promise.all(rows.map(toProjectListItem));
   } catch (e) {
-    error = e instanceof Error ? e.message : "Failed to read on-chain registry";
+    error = e instanceof Error ? e.message : "Failed to read OpenResearch program";
   }
 
   return (
@@ -70,8 +70,8 @@ function Header({ count, error }: { count: number; error: string | null }) {
                 "Network unreachable"
               ) : (
                 <>
-                  {count} project{count === 1 ? "" : "s"} listed on 0G Galileo ·{" "}
-                  <AddressLink address={PROJECT_REGISTRY_ADDRESS} />
+                  {count} project{count === 1 ? "" : "s"} listed on Solana devnet ·{" "}
+                  <AddressLink address={OPEN_RESEARCH_PROGRAM_ID.toBase58()} />
                 </>
               )}
             </p>
@@ -118,7 +118,7 @@ function ErrorState({ message }: { message: string }) {
         <div className="border border-[var(--color-line)] bg-[var(--color-bg-soft)] px-8 py-12">
           <p className="label">Registry unavailable</p>
           <p className="mt-3 font-sans text-base text-[var(--color-fg)]">
-            Could not read the on-chain registry just now.
+            Could not read the OpenResearch Solana program just now.
           </p>
           <p className="mt-2 font-mono text-xs text-[var(--color-fg-dim)]">
             {message}
@@ -127,15 +127,37 @@ function ErrorState({ message }: { message: string }) {
             Refresh in a moment, or try the explorer directly:
           </p>
           <a
-            href={explorerAddressUrl(PROJECT_REGISTRY_ADDRESS)}
+            href={explorerAddressUrl(OPEN_RESEARCH_PROGRAM_ID)}
             target="_blank"
             rel="noreferrer noopener"
             className="mt-2 inline-block font-mono text-xs text-[var(--color-fg-muted)] underline-offset-4 hover:text-[var(--color-fg)] hover:underline"
           >
-            chainscan-galileo.0g.ai →
+            explorer.solana.com →
           </a>
         </div>
       </div>
     </section>
   );
+}
+
+async function toProjectListItem(project: ProjectView): Promise<ProjectListItem> {
+  const mint = await fetchProjectMint(null, project.id);
+  return {
+    id: project.id.toString(),
+    createdAt: project.createdAt.toISOString(),
+    tokenName: project.tokenName,
+    tokenSymbol: project.tokenSymbol,
+    mint: project.mint.toBase58(),
+    protocolHash: project.protocolHash,
+    protocolIrysId: project.protocolIrysId,
+    baselineAggregateScore: project.baselineAggregateScore.toString(),
+    currentBestAggregateScore: project.currentBestAggregateScore.toString(),
+    currentBestMiner: project.currentBestMiner.toBase58(),
+    totalSupply: (mint?.supply ?? 0n).toString(),
+    decimals: mint?.decimals ?? 0,
+    basePrice: project.basePrice.toString(),
+    slope: project.slope.toString(),
+    minerPoolCap: project.minerPoolCap.toString(),
+    minerPoolMinted: project.minerPoolMinted.toString(),
+  };
 }

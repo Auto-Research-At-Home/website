@@ -7,7 +7,7 @@ const steps = [
   {
     role: "Registry",
     title: "Mints a project token",
-    body: "A bonding-curve ProjectToken is deployed. Protocol, repo snapshot, benchmark suite, and baseline score are pinned to 0G Storage with on-chain root hashes.",
+    body: "A bonding-curve SPL token is initialized. Protocol, repo snapshot, benchmark suite, and baseline score are uploaded to Irys with on-chain retrieval IDs and SHA-256 hashes.",
   },
   {
     role: "Miner",

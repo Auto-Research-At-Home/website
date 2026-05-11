@@ -1,5 +1,5 @@
 import type { ComponentPropsWithoutRef } from "react";
-import { explorerAddressUrl, shortAddress } from "@/lib/arah/format";
+import { explorerAddressUrl, shortAddress } from "@/lib/openResearch/format";
 
 type AddressLinkProps = {
   address: string;
@@ -8,8 +8,7 @@ type AddressLinkProps = {
 } & Omit<ComponentPropsWithoutRef<"a">, "href" | "children">;
 
 /**
- * Renders an EVM address (or any value the registry treats as an address)
- * as a link to the 0G Galileo explorer with a hover underline affordance.
+ * Renders a Solana address as a devnet explorer link.
  */
 export function AddressLink({
   address,
@@ -24,7 +23,7 @@ export function AddressLink({
       href={explorerAddressUrl(address)}
       target="_blank"
       rel="noreferrer noopener"
-      title={title ?? `View ${address} on 0G Galileo Chainscan`}
+      title={title ?? `View ${address} on Solana Explorer`}
       className={
         "relative z-20 cursor-pointer underline-offset-4 hover:text-[var(--color-brand-bright)] hover:underline pointer-events-auto" +
         (className ? ` ${className}` : "")

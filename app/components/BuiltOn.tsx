@@ -1,5 +1,4 @@
 import Image from "next/image";
-import { ZeroGLogo } from "./brand/ZeroGLogo";
 
 export function BuiltOn() {
   return (
@@ -33,7 +32,7 @@ export function BuiltOn() {
           </a>
 
           <a
-            href="https://0g.ai"
+            href="https://solana.com"
             target="_blank"
             rel="noreferrer noopener"
             className="group flex items-center gap-5 bg-[var(--color-bg-soft)] p-6 transition-colors hover:bg-[var(--color-bg-elev)] md:p-8"
@@ -44,12 +43,11 @@ export function BuiltOn() {
             <div className="min-w-0 flex-1">
               <p className="label">Live on</p>
               <p className="mt-1.5 flex items-center gap-2 font-sans text-base leading-snug text-[var(--color-fg)] md:text-lg">
-                <ZeroGLogo className="h-5 w-auto" />
-                <span>Galileo testnet</span>
+                <span>Solana devnet + Irys</span>
               </p>
             </div>
             <span className="hidden font-mono text-xs text-[var(--color-fg-dim)] transition-colors group-hover:text-[var(--color-fg-muted)] sm:inline">
-              chain 16602
+              program
             </span>
           </a>
         </div>
