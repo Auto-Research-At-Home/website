@@ -136,12 +136,13 @@ export function ProjectsDirectory({ projects }: { projects: ProjectListItem[] })
         <div className="container-page py-16 md:py-20">
           <div className="flex flex-col gap-4">
             <p className="label">/ projects</p>
-            <h2 className="font-sans text-3xl leading-tight font-medium tracking-tight text-[var(--color-fg)] md:text-[44px]">
-              All active benchmarks
+            <h2 className="font-sans text-3xl leading-tight font-medium tracking-tight text-[var(--color-fg)] md:text-[48px]">
+              All active <span className="serif">benchmarks</span>
             </h2>
-            <p className="max-w-2xl font-sans text-base leading-relaxed text-[var(--color-fg-muted)]">
-              {projects.length} project{projects.length === 1 ? "" : "s"}.
-              Click any row for the deep dive.
+            <p className="max-w-2xl font-sans text-[15px] leading-relaxed text-[var(--color-fg-muted)] md:text-base">
+              <span className="tick text-[var(--color-fg)]">{projects.length}</span>{" "}
+              project{projects.length === 1 ? "" : "s"} on the registry.{" "}
+              <span className="text-[var(--color-fg-dim)]">Click any row for the deep dive.</span>
             </p>
           </div>
 
@@ -162,7 +163,7 @@ export function ProjectsDirectory({ projects }: { projects: ProjectListItem[] })
               </p>
             </div>
           ) : (
-            <div className="mt-8 overflow-x-auto border border-[var(--color-line)] bg-[var(--color-bg-soft)]">
+            <div className="projects-table mt-8 overflow-x-auto border border-[var(--color-line)] bg-[var(--color-bg-soft)]">
               <table className="w-full min-w-[1040px] border-collapse">
                 <thead className="bg-[var(--color-bg)]">
                   <tr className="border-b border-[var(--color-line)]">
@@ -180,7 +181,7 @@ export function ProjectsDirectory({ projects }: { projects: ProjectListItem[] })
                     ].map((head) => (
                       <th
                         key={head}
-                        className="px-4 py-3 text-left font-mono text-[10px] font-medium tracking-[0.14em] text-[var(--color-fg-dim)] uppercase"
+                        className="px-4 py-4 text-left font-mono text-[10px] font-medium tracking-[0.16em] text-[var(--color-fg-muted)] uppercase"
                       >
                         {head}
                       </th>
@@ -188,10 +189,11 @@ export function ProjectsDirectory({ projects }: { projects: ProjectListItem[] })
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((project) => (
+                  {filtered.map((project, index) => (
                     <ProjectRow
                       key={project.id}
                       project={project}
+                      index={index}
                     />
                   ))}
                 </tbody>
@@ -236,7 +238,7 @@ function ProjectsToolbar({
               type="button"
               key={item.id}
               onClick={() => setFilter(item.id)}
-              className={`rounded-full border px-3 py-1.5 font-mono text-[11px] transition-colors ${
+              className={`rounded-full border px-3.5 py-1.5 font-mono text-[11px] tracking-[0.04em] transition-colors ${
                 active
                   ? "border-[rgb(74_222_188_/_0.45)] bg-[rgb(74_222_188_/_0.08)] text-[var(--color-accent)]"
                   : "border-[var(--color-line-2)] text-[var(--color-fg-muted)] hover:border-[var(--color-line-3)] hover:text-[var(--color-fg)]"
@@ -252,7 +254,7 @@ function ProjectsToolbar({
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         placeholder="$ search project, miner, cid..."
-        className="rounded-[var(--radius-sm)] border border-[var(--color-line-2)] bg-[var(--color-bg)] px-4 py-3 font-mono text-[12px] text-[var(--color-fg)] placeholder:text-[var(--color-fg-dim)] focus:border-[var(--color-accent)] focus:outline-none"
+        className="rounded-[var(--radius-sm)] border border-[var(--color-line-2)] bg-[var(--color-bg)] px-4 py-3 font-mono text-[13px] text-[var(--color-fg)] placeholder:text-[var(--color-fg-dim)] focus:border-[var(--color-accent)] focus:outline-none"
       />
 
       <label className="flex items-center gap-2">
@@ -260,7 +262,7 @@ function ProjectsToolbar({
         <select
           value={sort}
           onChange={(event) => setSort(event.target.value as SortId)}
-          className="w-full rounded-[var(--radius-sm)] border border-[var(--color-line-2)] bg-[var(--color-bg)] px-3 py-3 font-mono text-[12px] text-[var(--color-fg)] focus:border-[var(--color-accent)] focus:outline-none"
+          className="w-full rounded-[var(--radius-sm)] border border-[var(--color-line-2)] bg-[var(--color-bg)] px-3 py-3 font-mono text-[13px] text-[var(--color-fg)] focus:border-[var(--color-accent)] focus:outline-none"
         >
           <option value="improvement">Best improvement</option>
           <option value="newest">Newest</option>
@@ -271,7 +273,13 @@ function ProjectsToolbar({
   );
 }
 
-function ProjectRow({ project }: { project: ProjectListItem }) {
+function ProjectRow({
+  project,
+  index,
+}: {
+  project: ProjectListItem;
+  index: number;
+}) {
   const baseline = bi(project.baselineAggregateScore);
   const currentBest = bi(project.currentBestAggregateScore);
   const improvement = aggregateImprovement(currentBest, baseline);
@@ -281,45 +289,52 @@ function ProjectRow({ project }: { project: ProjectListItem }) {
   const minerPoolMinted = bi(project.minerPoolMinted);
   const poolPercent =
     minerPoolCap > 0n ? Number((minerPoolMinted * 10000n) / minerPoolCap) / 100 : 0;
+  const zebra = index % 2 === 1;
 
   return (
     <tr
-      className="border-b border-[var(--color-line)] transition-colors last:border-b-0 hover:bg-[rgb(74_222_188_/_0.055)]"
+      className={`project-row group border-b border-[var(--color-line)] last:border-b-0 ${
+        zebra ? "bg-[rgb(255_255_255_/_0.012)]" : ""
+      }`}
     >
-      <td className="px-4 py-4">
+      <td className="relative px-4 py-5">
+        <span className="project-row-edge" aria-hidden="true" />
         <Link
           href={`/projects/${project.id}`}
-          className="font-mono text-sm text-[var(--color-fg)] underline-offset-4 hover:text-[var(--color-accent)] hover:underline"
+          className="font-sans text-[15px] font-medium tracking-tight text-[var(--color-fg)] underline-offset-4 transition-colors group-hover:text-[var(--color-accent)] hover:underline"
         >
           {project.tokenName}
         </Link>
-        <div className="mt-1 flex items-center gap-2 font-mono text-[11px] text-[var(--color-fg-dim)]">
-          <span>{project.tokenSymbol}</span>
-          <span>cid · {shortHash(project.protocolHash, 6, 4)}</span>
+        <div className="mt-1.5 flex items-center gap-2 font-mono text-[11px] text-[var(--color-fg-muted)]">
+          <span className="text-[var(--color-fg)]">{project.tokenSymbol}</span>
+          <span className="text-[var(--color-fg-dim)]">·</span>
+          <span>cid {shortHash(project.protocolHash, 6, 4)}</span>
         </div>
       </td>
-      <td className="px-4 py-4 font-mono text-xs text-[var(--color-fg-muted)]">
-        <span className="block text-[var(--color-fg)]">{project.tokenSymbol}</span>
-        <span className="mt-1 block">
+      <td className="px-4 py-5 font-mono text-xs">
+        <span className="block text-[13px] font-medium text-[var(--color-fg)]">
+          {project.tokenSymbol}
+        </span>
+        <span className="mt-1 block text-[var(--color-fg-muted)]">
           <AddressLink address={project.mint} />
         </span>
       </td>
-      <td className="tick px-4 py-4 text-sm text-[var(--color-fg-muted)]">
+      <td className="tick px-4 py-5 text-[15px] text-[var(--color-fg-muted)]">
         {formatAggregateScore(baseline)}
       </td>
-      <td className="tick px-4 py-4 text-sm text-[var(--color-fg)]">
+      <td className="tick px-4 py-5 text-[16px] font-semibold text-[var(--color-fg)]">
         {formatAggregateScore(currentBest)}
       </td>
-      <td className="tick px-4 py-4 text-sm">
+      <td className="tick px-4 py-5">
         {delta === null ? (
-          <span className="text-[var(--color-fg-dim)]">-</span>
+          <span className="text-sm text-[var(--color-fg-dim)]">-</span>
         ) : (
           <span
-            className={
+            className={`text-[15px] font-medium ${
               delta >= 0
                 ? "text-[var(--color-accent)]"
                 : "text-[var(--color-rose)]"
-            }
+            }`}
           >
             {delta >= 0 ? "+" : ""}
             {delta.toFixed(2)}%
@@ -329,25 +344,28 @@ function ProjectRow({ project }: { project: ProjectListItem }) {
           {formatAggregateScore(improvement)}
         </div>
       </td>
-      <td className="px-4 py-4">
+      <td className="px-4 py-5">
         <Sparkline baseline={baseline} current={currentBest} />
       </td>
-      <td className="px-4 py-4 font-mono text-xs text-[var(--color-fg-muted)]">
-        {formatTokenAmount(bi(project.totalSupply), project.decimals)}{" "}
-        {project.tokenSymbol}
+      <td className="px-4 py-5 font-mono text-[13px] text-[var(--color-fg-muted)]">
+        <span className="text-[var(--color-fg)]">
+          {formatTokenAmount(bi(project.totalSupply), project.decimals)}
+        </span>{" "}
+        <span className="text-[var(--color-fg-dim)]">{project.tokenSymbol}</span>
       </td>
-      <td className="px-4 py-4">
-        <div className="font-mono text-xs text-[var(--color-fg)]">
-          {formatSol(currentPrice(project))} SOL
+      <td className="px-4 py-5">
+        <div className="font-mono text-[13px] text-[var(--color-fg)]">
+          {formatSol(currentPrice(project))}{" "}
+          <span className="text-[var(--color-fg-dim)]">SOL</span>
         </div>
         <div className="mt-2 h-1.5 w-24 rounded-full bg-[rgb(255_255_255_/_0.08)]">
           <div
-            className="h-full rounded-full bg-[var(--color-accent)]"
+            className="h-full rounded-full bg-[var(--color-accent)] transition-[width] duration-500"
             style={{ width: `${Math.max(4, Math.min(100, poolPercent))}%` }}
           />
         </div>
       </td>
-      <td className="px-4 py-4">
+      <td className="px-4 py-5">
         <span
           className={`inline-flex rounded-full border px-2.5 py-1 font-mono text-[10px] tracking-[0.08em] uppercase ${
             status === "winning"
@@ -360,11 +378,11 @@ function ProjectRow({ project }: { project: ProjectListItem }) {
           {status}
         </span>
       </td>
-      <td className="px-4 py-4 text-right text-[var(--color-fg-dim)]">
+      <td className="px-4 py-5 text-right text-[var(--color-fg-dim)]">
         <Link
           href={`/projects/${project.id}`}
           aria-label={`Open ${project.tokenName}`}
-          className="inline-flex size-8 items-center justify-center rounded-full border border-[var(--color-line-2)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+          className="inline-flex size-8 items-center justify-center rounded-full border border-[var(--color-line-2)] transition-colors group-hover:border-[var(--color-accent)] group-hover:text-[var(--color-accent)]"
         >
           <Arrow />
         </Link>
@@ -418,17 +436,17 @@ function RegistrySnapshot({ projects }: { projects: ProjectListItem[] }) {
   return (
     <div>
       <p className="label">/ registry</p>
-      <h2 className="mt-4 font-sans text-3xl font-medium tracking-tight text-[var(--color-fg)]">
-        Current registry state
+      <h2 className="mt-4 font-sans text-3xl font-medium tracking-tight text-[var(--color-fg)] md:text-[34px]">
+        Current registry <span className="serif">state</span>
       </h2>
-      <p className="mt-3 max-w-xl font-sans text-sm leading-relaxed text-[var(--color-fg-muted)]">
+      <p className="mt-3 max-w-xl font-sans text-[15px] leading-relaxed text-[var(--color-fg-muted)]">
         Real project rows from the Solana program, sorted by publish date. This
         is a state snapshot, not a simulated event stream.
       </p>
 
       <div className="mt-8 border border-[var(--color-line)] bg-[var(--color-bg-soft)]">
         <div className="flex items-center justify-between border-b border-[var(--color-line)] px-4 py-3">
-          <span className="font-mono text-[11px] text-[var(--color-fg-dim)]">
+          <span className="font-mono text-[11px] tracking-[0.1em] text-[var(--color-fg-muted)] uppercase">
             / registry snapshot
           </span>
           <span className="or-tag">
@@ -439,18 +457,18 @@ function RegistrySnapshot({ projects }: { projects: ProjectListItem[] }) {
         {rows.map((item) => (
           <div
             key={item.id}
-            className="grid gap-2 border-b border-[var(--color-line)] px-4 py-3 last:border-b-0 md:grid-cols-[112px_1fr_112px_128px] md:items-center"
+            className="grid gap-2 border-b border-[var(--color-line)] px-4 py-4 transition-colors last:border-b-0 hover:bg-[rgb(255_255_255_/_0.018)] md:grid-cols-[112px_1fr_112px_128px] md:items-center"
           >
-            <span className="font-mono text-[11px] text-[var(--color-fg-dim)]">
+            <span className="font-mono text-[11px] text-[var(--color-fg-muted)]">
               {item.date}
             </span>
-            <span className="font-sans text-sm text-[var(--color-fg-muted)]">
+            <span className="font-sans text-[14px] leading-snug text-[var(--color-fg)]">
               {item.message}
             </span>
-            <span className="font-mono text-[10px] tracking-[0.1em] text-[var(--color-accent)] uppercase">
+            <span className="font-mono text-[10px] tracking-[0.12em] text-[var(--color-accent)] uppercase">
               {item.status}
             </span>
-            <span className="font-mono text-[11px] text-[var(--color-fg-dim)]">
+            <span className="font-mono text-[11px] text-[var(--color-fg-muted)]">
               {item.miner}
             </span>
           </div>
@@ -513,10 +531,10 @@ function TopMiners({ projects }: { projects: ProjectListItem[] }) {
   return (
     <div>
       <p className="label">/ leaderboard</p>
-      <h2 className="mt-4 font-sans text-3xl font-medium tracking-tight text-[var(--color-fg)]">
-        Top miners
+      <h2 className="mt-4 font-sans text-3xl font-medium tracking-tight text-[var(--color-fg)] md:text-[34px]">
+        Top <span className="serif">miners</span>
       </h2>
-      <p className="mt-3 max-w-xl font-sans text-sm leading-relaxed text-[var(--color-fg-muted)]">
+      <p className="mt-3 max-w-xl font-sans text-[15px] leading-relaxed text-[var(--color-fg-muted)]">
         Real current-best miners, aggregated across listed projects.
       </p>
 
@@ -553,18 +571,18 @@ function TopMiners({ projects }: { projects: ProjectListItem[] }) {
           miners.map((row, i) => (
             <div
               key={row.miner}
-              className="grid grid-cols-[42px_1fr_auto] items-center gap-3 border-b border-[var(--color-line)] px-4 py-3 last:border-b-0"
+              className="grid grid-cols-[42px_1fr_auto] items-center gap-3 border-b border-[var(--color-line)] px-4 py-4 transition-colors last:border-b-0 hover:bg-[rgb(255_255_255_/_0.018)]"
             >
-              <span className="tick text-sm text-[var(--color-accent)]">
+              <span className="tick text-[15px] font-medium text-[var(--color-accent)]">
                 {String(i + 1).padStart(2, "0")}
               </span>
               <span className="min-w-0">
                 <AddressLink address={row.miner} />
-                <small className="mt-1 block truncate font-mono text-[11px] text-[var(--color-fg-dim)]">
+                <small className="mt-1 block truncate font-mono text-[11px] text-[var(--color-fg-muted)]">
                   {row.projects.length} project{row.projects.length === 1 ? "" : "s"}
                 </small>
               </span>
-              <span className="tick text-sm text-[var(--color-fg)]">
+              <span className="tick text-[15px] font-semibold text-[var(--color-fg)]">
                 {formatAggregateScore(row.points)}
               </span>
             </div>
