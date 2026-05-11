@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { CopyTextButton } from "./CopyTextButton";
+import { useCallback, useState } from "react";
 import { ProjectTradeModal } from "./ProjectTradeModal";
 
 type ProjectHeaderActionsProps = {
@@ -26,24 +25,38 @@ export function ProjectHeaderActions({
   className,
 }: ProjectHeaderActionsProps) {
   const [tradeOpen, setTradeOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copyMint = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(mint);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      /* ignore */
+    }
+  }, [mint]);
 
   return (
     <>
       <div
         className={`flex flex-wrap items-center gap-2 ${className ?? ""}`}
       >
-        <CopyTextButton
-          variant="label"
-          text={mint}
-          label="Copy project token mint for mining"
-          idleLabel="Mine"
-          className="!normal-case"
-        />
+        <button
+          type="button"
+          onClick={copyMint}
+          className="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 font-mono text-[12px] text-[var(--color-brand-muted)] transition-colors hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand-bright)]"
+          title="Copy project token mint for mining"
+        >
+          {copied ? <CheckIcon /> : <MineIcon />}
+          {copied ? "Copied" : "Mine"}
+        </button>
         <button
           type="button"
           onClick={() => setTradeOpen(true)}
-          className="shrink-0 cursor-pointer rounded border border-[var(--color-line)] bg-[var(--color-bg)] px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-[var(--color-brand-muted)] transition-colors hover:border-[var(--color-brand)] hover:text-[var(--color-brand-bright)]"
+          className="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded border border-[var(--color-line)] bg-[var(--color-bg)] px-3 py-2 font-mono text-[12px] text-[var(--color-brand-muted)] transition-colors hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand-bright)]"
         >
+          <TradeIcon />
           Trade
         </button>
       </div>
@@ -59,5 +72,63 @@ export function ProjectHeaderActions({
         totalSupply={totalSupply}
       />
     </>
+  );
+}
+
+function MineIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M14 4l6 6-10 10H4v-6L14 4z" />
+      <path d="M13 5l6 6" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
+function TradeIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M7 7h11l-3-3" />
+      <path d="M17 17H6l3 3" />
+      <path d="M18 7l-3 3" />
+      <path d="M6 17l3-3" />
+    </svg>
   );
 }

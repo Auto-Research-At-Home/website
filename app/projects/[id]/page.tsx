@@ -18,7 +18,13 @@ import { ZERO_HASH_HEX } from "@/lib/openResearch/hash";
 import { fetchArtifactByReference, type FetchedArtifact } from "@/lib/openResearch/artifact";
 import { irysUrl } from "@/lib/openResearch/irys";
 import { isProjectHiddenInUi } from "@/lib/openResearch/projectUi";
-import { fetchProject, fetchProjectMint, type ProjectView } from "@/lib/openResearch/read";
+import {
+  fetchProject,
+  fetchProjectMint,
+  listProposals,
+  type ProjectView,
+  type ProposalView,
+} from "@/lib/openResearch/read";
 import { renderProtocolMarkdown } from "@/lib/openResearch/protocolMarkdown";
 import { priceAtSupply } from "@/lib/openResearch/trade";
 import { AddressLink } from "../../components/AddressLink";
@@ -71,7 +77,7 @@ export default async function ProjectViewerPage({ params }: RouteProps) {
     notFound();
   }
 
-  const [mintInfo, protocolArtifact] = await Promise.all([
+  const [mintInfo, protocolArtifact, proposals] = await Promise.all([
     fetchProjectMint(null, project.id),
     fetchArtifactByReference({
       hash: project.protocolHash,
@@ -82,6 +88,9 @@ export default async function ProjectViewerPage({ params }: RouteProps) {
         message: e instanceof Error ? e.message : "Irys gateway unreachable",
       }),
     ),
+    listProposals(null)
+      .then((rows) => rows.filter((proposal) => proposal.projectId === project.id))
+      .catch(() => [] as ProposalView[]),
   ]);
 
   return (
@@ -89,12 +98,19 @@ export default async function ProjectViewerPage({ params }: RouteProps) {
       <Nav />
       <main>
         <Breadcrumbs id={project.id.toString()} symbol={project.tokenSymbol} />
-        <ProjectHeader project={project} totalSupply={mintInfo?.supply ?? 0n} decimals={mintInfo?.decimals ?? 0} />
+        <ProjectHeader
+          project={project}
+          totalSupply={mintInfo?.supply ?? 0n}
+          decimals={mintInfo?.decimals ?? 0}
+          artifact={protocolArtifact}
+          proposalCount={proposals.length}
+        />
         <ProjectBody
           project={project}
           totalSupply={mintInfo?.supply ?? 0n}
           decimals={mintInfo?.decimals ?? 0}
           artifact={protocolArtifact}
+          proposals={proposals}
         />
       </main>
       <Footer />
@@ -127,10 +143,14 @@ function ProjectHeader({
   project,
   totalSupply,
   decimals,
+  artifact,
+  proposalCount,
 }: {
   project: ProjectView;
   totalSupply: bigint;
   decimals: number;
+  artifact: FetchedArtifact;
+  proposalCount: number;
 }) {
   const isBaseline = project.currentBestMiner.toBase58() === SYSTEM_PROGRAM;
   const improvement = aggregateImprovement(
@@ -142,6 +162,7 @@ function ProjectHeader({
     project.baselineAggregateScore,
   );
   const currentPrice = priceAtSupply(project.basePrice, project.slope, totalSupply);
+  const description = projectDescription(artifact);
 
   return (
     <section className="border-b border-[var(--color-line)]">
@@ -167,14 +188,19 @@ function ProjectHeader({
             className="mt-1 md:mt-2"
           />
         </div>
-        <p className="mt-4 max-w-2xl font-sans text-base leading-snug text-[var(--color-fg-muted)] md:text-lg">
-          <span className="text-[var(--color-fg)]">
-            Immutable benchmark project on Solana devnet.
-          </span>{" "}
-          Artifacts are fetched from Irys by their on-chain Irys IDs and
-          pinned alongside SHA-256 hashes. Beat the network best to earn{" "}
-          {project.tokenSymbol} from the miner pool.
-        </p>
+        <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <p className="max-w-3xl font-sans text-base leading-relaxed text-[var(--color-fg-muted)] md:text-lg">
+            <span className="text-[var(--color-fg)]">
+              {description.title}
+            </span>{" "}
+            {description.body}
+          </p>
+          <div className="grid grid-cols-3 gap-px border border-[var(--color-line)] bg-[var(--color-line)]">
+            <MiniStat label="Creator" value={shortAddress(project.creator.toBase58())} />
+            <MiniStat label="Proposals" value={proposalCount.toLocaleString()} />
+            <MiniStat label="Created" value={formatDate(project.createdAt)} />
+          </div>
+        </div>
 
         <dl className="mt-10 grid grid-cols-2 gap-x-6 gap-y-6 border-t border-[var(--color-line)] pt-8 md:grid-cols-4">
           <Stat
@@ -212,6 +238,17 @@ function ProjectHeader({
   );
 }
 
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 bg-[var(--color-bg-soft)] p-3">
+      <p className="label-muted text-[9px]">{label}</p>
+      <p className="mt-2 truncate font-mono text-xs text-[var(--color-fg)]">
+        {value}
+      </p>
+    </div>
+  );
+}
+
 function Stat({
   label,
   value,
@@ -245,26 +282,70 @@ function ProjectBody({
   totalSupply,
   decimals,
   artifact,
+  proposals,
 }: {
   project: ProjectView;
   totalSupply: bigint;
   decimals: number;
   artifact: FetchedArtifact;
+  proposals: ProposalView[];
 }) {
   return (
     <section>
       <div className="container-page py-12 md:py-16">
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-12">
-          <ProtocolPanel
-            hash={project.protocolHash}
-            irysId={project.protocolIrysId}
-            artifact={artifact}
+          <div className="space-y-10">
+            <BenchmarkTrackRecord project={project} proposals={proposals} />
+            <ProtocolPanel
+              hash={project.protocolHash}
+              irysId={project.protocolIrysId}
+              artifact={artifact}
+            />
+          </div>
+          <OnChainCard
+            project={project}
+            totalSupply={totalSupply}
+            decimals={decimals}
+            proposals={proposals}
           />
-          <OnChainCard project={project} totalSupply={totalSupply} decimals={decimals} />
         </div>
       </div>
     </section>
   );
+}
+
+function projectDescription(artifact: FetchedArtifact) {
+  const fallback = {
+    title: "Immutable benchmark project on Solana devnet.",
+    body: "Artifacts are fetched from Irys by their on-chain Irys IDs and pinned alongside SHA-256 hashes. Beat the network best to earn tokens from the miner pool.",
+  };
+
+  if (artifact.kind !== "json" || !artifact.data || typeof artifact.data !== "object") {
+    return fallback;
+  }
+
+  const data = artifact.data as Record<string, unknown>;
+  const rawTitle = firstString(data, ["title", "name", "project_name", "projectName"]);
+  const rawBody = firstString(data, [
+    "description",
+    "summary",
+    "purpose",
+    "statement_of_purpose",
+    "statementOfPurpose",
+  ]);
+
+  return {
+    title: rawTitle || fallback.title,
+    body: rawBody || fallback.body,
+  };
+}
+
+function firstString(data: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = data[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
 }
 
 function ProtocolPanel({
@@ -414,6 +495,189 @@ function JsonView({ data, raw }: { data: unknown; raw: string }) {
   );
 }
 
+function BenchmarkTrackRecord({
+  project,
+  proposals,
+}: {
+  project: ProjectView;
+  proposals: ProposalView[];
+}) {
+  const sorted = [...proposals].sort(
+    (a, b) => a.submittedAt.getTime() - b.submittedAt.getTime(),
+  );
+  const accepted = sorted.filter(
+    (proposal) =>
+      proposal.status === "approved" ||
+      proposal.miner.toBase58() === project.currentBestMiner.toBase58(),
+  );
+  const points = [
+    {
+      label: "Baseline",
+      score: project.baselineAggregateScore,
+      date: project.createdAt,
+      miner: "project start",
+    },
+    ...accepted.map((proposal) => ({
+      label: `Proposal #${proposal.id.toString()}`,
+      score:
+        proposal.verifiedAggregateScore !== 0n
+          ? proposal.verifiedAggregateScore
+          : proposal.claimedAggregateScore,
+      date: proposal.submittedAt,
+      miner: shortAddress(proposal.miner.toBase58()),
+    })),
+  ];
+  const finalScore = project.currentBestAggregateScore;
+  const hasCurrent =
+    points[points.length - 1]?.score !== finalScore ||
+    points[points.length - 1]?.miner !== shortAddress(project.currentBestMiner.toBase58());
+  if (hasCurrent && project.currentBestMiner.toBase58() !== SYSTEM_PROGRAM) {
+    points.push({
+      label: "Current best",
+      score: finalScore,
+      date: new Date(),
+      miner: shortAddress(project.currentBestMiner.toBase58()),
+    });
+  }
+
+  return (
+    <section className="border border-[var(--color-line)] bg-[var(--color-bg-soft)]">
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--color-line)] px-5 py-4">
+        <div>
+          <p className="label">Benchmark track record</p>
+          <h2 className="mt-1 font-mono text-2xl font-semibold text-[var(--color-fg)]">
+            Mining improvements
+          </h2>
+        </div>
+        <span className="or-tag">
+          <span className="dot" />
+          {proposals.length} proposal{proposals.length === 1 ? "" : "s"}
+        </span>
+      </header>
+
+      <div className="grid grid-cols-1 gap-0 lg:grid-cols-[minmax(0,1fr)_220px]">
+        <div className="border-b border-[var(--color-line)] p-5 lg:border-r lg:border-b-0">
+          <ScorePath points={points} />
+        </div>
+        <div className="p-5">
+          <ContributionGrid proposals={proposals} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ScorePath({
+  points,
+}: {
+  points: { label: string; score: bigint; date: Date; miner: string }[];
+}) {
+  const values = points.map((point) => Number(point.score));
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const width = 640;
+  const height = 180;
+  const coords = points.map((point, i) => {
+    const x = points.length === 1 ? 0 : (i / (points.length - 1)) * (width - 32) + 16;
+    const y = height - 18 - ((Number(point.score) - min) / (max - min || 1)) * (height - 42);
+    return { ...point, x, y };
+  });
+  const path = `M ${coords.map((point) => `${point.x},${point.y}`).join(" L ")}`;
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="block h-auto w-full">
+        {[0, 1, 2, 3].map((i) => (
+          <line
+            key={i}
+            x1="0"
+            x2={width}
+            y1={24 + i * 42}
+            y2={24 + i * 42}
+            stroke="rgba(255,255,255,0.06)"
+          />
+        ))}
+        <path
+          d={path}
+          fill="none"
+          stroke="rgba(74,222,188,0.88)"
+          strokeWidth="2"
+        />
+        {coords.map((point, i) => (
+          <g key={`${point.label}-${i}`} transform={`translate(${point.x}, ${point.y})`}>
+            <circle
+              r={i === coords.length - 1 ? 5 : 3.5}
+              fill={i === coords.length - 1 ? "rgba(74,222,188,1)" : "var(--color-bg)"}
+              stroke="rgba(74,222,188,0.9)"
+              strokeWidth="1.6"
+            />
+          </g>
+        ))}
+      </svg>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {coords.slice(-4).map((point, i) => (
+          <div
+            key={`${point.label}-row-${i}`}
+            className="border border-[var(--color-line)] bg-[var(--color-bg)] p-3"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-mono text-xs text-[var(--color-fg)]">
+                {point.label}
+              </p>
+              <p className="font-mono text-xs text-[var(--color-accent)]">
+                {formatAggregateScore(point.score)}
+              </p>
+            </div>
+            <p className="mt-1 font-mono text-[11px] text-[var(--color-fg-dim)]">
+              {formatDate(point.date)} · {point.miner}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ContributionGrid({ proposals }: { proposals: ProposalView[] }) {
+  const days = Array.from({ length: 35 }, (_, i) => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - (34 - i));
+    const count = proposals.filter((proposal) => {
+      const pDate = new Date(proposal.submittedAt);
+      pDate.setHours(0, 0, 0, 0);
+      return pDate.getTime() === date.getTime();
+    }).length;
+    return { date, count };
+  });
+
+  return (
+    <div>
+      <p className="label">Proposal activity</p>
+      <div className="mt-4 grid grid-cols-7 gap-1.5">
+        {days.map((day) => (
+          <span
+            key={day.date.toISOString()}
+            title={`${formatDate(day.date)} · ${day.count} proposal${day.count === 1 ? "" : "s"}`}
+            className={`aspect-square rounded-[2px] border border-[var(--color-line)] ${
+              day.count === 0
+                ? "bg-[rgb(255_255_255_/_0.025)]"
+                : day.count === 1
+                  ? "bg-[rgb(74_222_188_/_0.22)]"
+                  : day.count < 4
+                    ? "bg-[rgb(74_222_188_/_0.42)]"
+                    : "bg-[var(--color-accent)]"
+            }`}
+          />
+        ))}
+      </div>
+      <p className="mt-4 font-sans text-xs leading-relaxed text-[var(--color-fg-muted)]">
+        Last 35 days of proposal submissions from on-chain proposal accounts.
+      </p>
+    </div>
+  );
+}
+
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -453,10 +717,12 @@ function OnChainCard({
   project,
   totalSupply,
   decimals,
+  proposals,
 }: {
   project: ProjectView;
   totalSupply: bigint;
   decimals: number;
+  proposals: ProposalView[];
 }) {
   const isBaseline = project.currentBestMiner.toBase58() === SYSTEM_PROGRAM;
   const currentPrice = priceAtSupply(project.basePrice, project.slope, totalSupply);
@@ -467,6 +733,7 @@ function OnChainCard({
         mint={project.mint.toBase58()}
         tokenSymbol={project.tokenSymbol}
       />
+      <PeopleList project={project} proposals={proposals} />
       <div className="border border-[var(--color-line)] bg-[var(--color-bg-soft)]">
         <div className="border-b border-[var(--color-line)] px-5 py-4">
           <p className="label">On-chain</p>
@@ -595,6 +862,61 @@ function OnChainCard({
   );
 }
 
+function PeopleList({
+  project,
+  proposals,
+}: {
+  project: ProjectView;
+  proposals: ProposalView[];
+}) {
+  const miners = Array.from(
+    new Set(
+      proposals
+        .map((proposal) => proposal.miner.toBase58())
+        .filter((miner) => miner !== SYSTEM_PROGRAM),
+    ),
+  ).slice(0, 5);
+
+  return (
+    <div className="mb-6 border border-[var(--color-line)] bg-[var(--color-bg-soft)]">
+      <div className="border-b border-[var(--color-line)] px-5 py-4">
+        <p className="label">People</p>
+        <p className="mt-1 font-sans text-sm text-[var(--color-fg-muted)]">
+          Creator and miners seen in proposal accounts.
+        </p>
+      </div>
+      <div className="divide-y divide-[var(--color-line)]">
+        <PersonRow label="Creator" address={project.creator.toBase58()} />
+        {miners.length === 0 ? (
+          <div className="px-5 py-4 font-sans text-sm text-[var(--color-fg-muted)]">
+            No miners have submitted proposals yet.
+          </div>
+        ) : (
+          miners.map((miner, i) => (
+            <PersonRow key={miner} label={`Miner ${i + 1}`} address={miner} />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PersonRow({ label, address }: { label: string; address: string }) {
+  return (
+    <div className="flex items-center gap-3 px-5 py-3">
+      <span className="grid size-8 shrink-0 place-items-center rounded-full border border-[var(--color-line-2)] bg-[var(--color-bg)] font-mono text-[10px] text-[var(--color-accent)]">
+        {label.slice(0, 1)}
+      </span>
+      <div className="min-w-0">
+        <p className="font-mono text-[11px] text-[var(--color-fg-dim)]">
+          {label}
+        </p>
+        <AddressLink address={address} />
+      </div>
+    </div>
+  );
+}
+
 function MineQuickstart({
   mint,
   tokenSymbol,
@@ -607,14 +929,19 @@ function MineQuickstart({
   const run = `Start autoresearch mining for ${mint}`;
 
   return (
-    <div className="mb-6 border border-[var(--color-line)] bg-[var(--color-bg-soft)]">
-      <div className="border-b border-[var(--color-line)] px-5 py-4">
-        <p className="label">Mine in 60 seconds</p>
+    <details className="group mb-6 border border-[var(--color-line)] bg-[var(--color-bg-soft)]" open>
+      <summary className="flex cursor-pointer list-none items-start justify-between gap-4 border-b border-[var(--color-line)] px-5 py-4 marker:content-none [&::-webkit-details-marker]:hidden">
+        <div>
+          <p className="label">Mine in 60 seconds</p>
         <p className="mt-1 font-sans text-sm leading-snug text-[var(--color-fg-muted)]">
           Install the skill, then start mining for {tokenSymbol}. Submit only if
           you beat the best.
         </p>
-      </div>
+        </div>
+        <span className="mt-1 font-mono text-lg text-[var(--color-fg-dim)] transition-transform group-open:rotate-45">
+          +
+        </span>
+      </summary>
 
       <div className="space-y-3 px-5 py-4">
         <CommandRow
@@ -630,7 +957,7 @@ function MineQuickstart({
           copyLabel={`Copy mining start prompt for ${tokenSymbol}`}
         />
       </div>
-    </div>
+    </details>
   );
 }
 
