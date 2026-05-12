@@ -42,6 +42,11 @@ import { Nav } from "../../components/Nav";
 export const dynamic = "force-dynamic";
 export const revalidate = 30;
 
+/** Legacy header blurb when protocol.json has no `meta.purposeStatement` (older publishes). */
+const FALLBACK_PURPOSE_TITLE = "Immutable benchmark project on Solana devnet.";
+const FALLBACK_PURPOSE_BODY =
+  "Artifacts are fetched from Irys by their on-chain Irys IDs and pinned alongside SHA-256 hashes. Beat the network best to earn tokens from the miner pool.";
+
 type RouteProps = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({
@@ -175,7 +180,7 @@ function ProjectHeader({
     metric,
   );
   const currentPrice = priceAtSupply(project.basePrice, project.slope, totalSupply);
-  const description = projectDescription(artifact);
+  const purposeStatement = metaPurposeStatementFromArtifact(artifact);
 
   return (
     <section className="border-b border-[var(--color-line)]">
@@ -203,10 +208,14 @@ function ProjectHeader({
         </div>
         <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
           <p className="max-w-3xl font-sans text-base leading-relaxed text-[var(--color-fg-muted)] md:text-lg">
-            <span className="text-[var(--color-fg)]">
-              {description.title}
-            </span>{" "}
-            {description.body}
+            {purposeStatement ? (
+              <span className="text-[var(--color-fg)]">{purposeStatement}</span>
+            ) : (
+              <>
+                <span className="text-[var(--color-fg)]">{FALLBACK_PURPOSE_TITLE}</span>{" "}
+                {FALLBACK_PURPOSE_BODY}
+              </>
+            )}
           </p>
           <div className="grid grid-cols-3 gap-px border border-[var(--color-line)] bg-[var(--color-line)]">
             <MiniStat label="Creator" value={shortAddress(project.creator.toBase58())} />
@@ -338,43 +347,22 @@ function ProjectBody({
   );
 }
 
-function projectDescription(artifact: FetchedArtifact) {
-  const fallback = {
-    title: "Immutable benchmark project on Solana devnet.",
-    body: "Artifacts are fetched from Irys by their on-chain Irys IDs and pinned alongside SHA-256 hashes. Beat the network best to earn tokens from the miner pool.",
-  };
-
+/** `protocol.json` from Irys (artifact) — same shape as on-chain pinned protocol. */
+function metaPurposeStatementFromArtifact(artifact: FetchedArtifact): string | null {
   if (artifact.kind !== "json" || !artifact.data || typeof artifact.data !== "object") {
-    return fallback;
+    return null;
   }
-
   const data = artifact.data as Record<string, unknown>;
-  const rawTitle = firstString(data, ["title", "name", "project_name", "projectName"]);
-  const rawBody = firstString(data, [
-    "description",
-    "summary",
-    "purpose",
-    "statement_of_purpose",
-    "statementOfPurpose",
-  ]);
-
-  return {
-    title: rawTitle || fallback.title,
-    body: rawBody || fallback.body,
-  };
+  const meta = data.meta;
+  if (!meta || typeof meta !== "object") return null;
+  const raw = (meta as Record<string, unknown>).purposeStatement;
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  return raw.trim();
 }
 
 function metricFromArtifact(artifact: FetchedArtifact): PrimaryMetric {
   if (artifact.kind !== "json") return DEFAULT_PRIMARY_METRIC;
   return primaryMetricFromProtocol(artifact.data);
-}
-
-function firstString(data: Record<string, unknown>, keys: string[]) {
-  for (const key of keys) {
-    const value = data[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  return "";
 }
 
 function ProtocolPanel({
